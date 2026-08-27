@@ -1,0 +1,39 @@
+//
+// Created by CaoKangqi on 2026/2/13.
+//
+
+#ifndef HORIZON_ALL_DEFINE_H
+#define HORIZON_ALL_DEFINE_H
+
+#define DF_READY 1
+#define DF_ERROR 0
+
+
+/// 圆周率
+#define PI 3.14159265358979f
+/// 角度转弧度
+#define DEG2RAD 0.017453292519943295769236907684886f
+/// 弧度转角度
+#define RAD2DEG 57.2957795130823208767981f
+
+#define ENCODER_TO_RAD 0.0007669903939428061485f
+
+#define RPM_TO_RADS    0.10471975511965977461542f
+
+#define RADS_TO_RPM (60.0f / (2.0f * PI))
+//设备离线
+#define DEVICE_OFFLINE 0
+//设备在线
+#define DEVICE_ONLINE  1
+//电机离线检测时间
+#define MOTOR_OFFLINE_TIME 15
+//电容离线检测时间
+#define CAP_OFFLINE_TIME 15
+//遥控离线检测时间
+#define DBUS_OFFLINE_TIME 50
+
+#define REFEREE_OFFLINE_TIME 800
+
+#define INIT_ANGLE 0
+
+#endif //HORIZON_ALL_DEFINE_H

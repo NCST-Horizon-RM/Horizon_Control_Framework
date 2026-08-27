@@ -1,0 +1,12 @@
+build/
+H7_Framework.jdebug
+H7_Framework.jdebug.user
+H7-GDB.jdebug
+H7-GDB.jdebug.user
+.settings/
+.idea/
+.vscode/
+.clangd
+.ideagit rm -r --cached .
+mx.scratch
+H7一键启动OpenOCD.bat
