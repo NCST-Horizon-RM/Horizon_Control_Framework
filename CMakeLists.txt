@@ -12,8 +12,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ================= 板卡 / 机器人选择 =================
 # ACTIVE_BOARD: Boards/ 下的板卡目录名
 # ACTIVE_APP:   对应板卡 App/ 下的机器人目录名
-set(ACTIVE_BOARD "H723" CACHE STRING "目标板卡(Boards/ 下的目录名)")
-set(ACTIVE_APP  "1_Catapult_Hero" CACHE STRING "机器人 App(Boards/<board>/App/ 下的目录名)")
+set(ACTIVE_BOARD "H723")
+set(ACTIVE_APP  "1_Catapult_Hero")
 
 # ---- 校验 ACTIVE_BOARD:板卡目录不存在直接报错 ----
 if(NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Boards/${ACTIVE_BOARD}/cmake/stm32cubemx")

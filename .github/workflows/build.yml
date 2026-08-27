@@ -6,14 +6,13 @@ on:
   pull_request:
 
 jobs:
-  # 自动发现 Boards/*/App/* 下的所有机器人，生成构建矩阵
-  # 新增机器人只需建目录，无需改本文件
+  # 搜索 Boards/*/App/* 下的所有机器人，生成构建矩阵
   discover:
     runs-on: ubuntu-22.04
     outputs:
       matrix: ${{ steps.set.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: set
         run: |
           matrix=$(for d in Boards/*/App/*; do
@@ -33,7 +32,7 @@ jobs:
         include: ${{ fromJSON(needs.discover.outputs.matrix) }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install ARM toolchain
         run: |
@@ -52,7 +51,7 @@ jobs:
         run: cmake --build build -j
 
       - name: Upload firmware
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: firmware-${{ matrix.board }}-${{ matrix.app }}
           path: |

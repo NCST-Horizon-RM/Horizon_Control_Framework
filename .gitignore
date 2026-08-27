@@ -1,4 +1,5 @@
 build/
+.claude
 H7_Framework.jdebug
 H7_Framework.jdebug.user
 H7-GDB.jdebug
