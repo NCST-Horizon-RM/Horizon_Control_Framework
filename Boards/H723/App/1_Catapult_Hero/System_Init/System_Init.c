@@ -26,9 +26,9 @@ void System_Init() {
     Get_UID(stm32_id);
 
     //CAN滤波器初始化
-    CAN_Config(&hfdcan1, FDCAN_RX_FIFO0);
-    CAN_Config(&hfdcan2, FDCAN_RX_FIFO1);
-    CAN_Config(&hfdcan3, FDCAN_RX_FIFO0);
+    CAN_Config(&hfdcan1, CLASSIC_1M, FDCAN_RX_FIFO0);
+    CAN_Config(&hfdcan2, CLASSIC_1M, FDCAN_RX_FIFO1);
+    CAN_Config(&hfdcan3, CLASSIC_1M, FDCAN_RX_FIFO0);
     //CAN设备初始化
     BSP_CAN_Auto_Init();
     //串口设备初始化

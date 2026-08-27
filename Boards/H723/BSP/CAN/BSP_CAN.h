@@ -9,6 +9,14 @@
 
 typedef FDCAN_HandleTypeDef hcan_t;
 
+/**
+ * @brief FDCAN 工作模式枚举
+ */
+typedef enum {
+    CLASSIC_1M = 0,   // 经典 CAN，标称段 1Mbps
+    FD_5M,            // FD，数据段 5Mbps
+} FDCAN_Work_Mode_e;
+
 // CAN接收统计数据结构
 typedef struct
 {
@@ -58,7 +66,7 @@ static const Auto_CAN_Reg_t MACRO_CONCAT(_can_reg_, __LINE__) = { \
 }
 void BSP_CAN_Auto_Init(void);
 
-void CAN_Config(hcan_t *hcan, uint32_t fifo);
+void CAN_Config(hcan_t *hcan, FDCAN_Work_Mode_e mode, uint32_t fifo);
 extern uint8_t CAN_Send_Msg(hcan_t *hcan, uint32_t id, uint8_t *data, uint32_t len);
 extern uint32_t CAN_GetTxFreeLevel(hcan_t *hcan);
 

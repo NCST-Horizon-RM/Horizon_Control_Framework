@@ -4,7 +4,8 @@
 /**
  * @brief FDCAN外设配置函数
  * @param hcan CAN句柄
- * @param fifo   选择接收FIFO（FDCAN_RX_FIFO0或FDCAN_RX_FIFO1）
+ * @param mode 工作模式（CLASSIC_1M 或 FD_5M）
+ * @param fifo 选择接收FIFO（FDCAN_RX_FIFO0或FDCAN_RX_FIFO1）
  * @note 该函数完成以下配置：
  *       0. 重置外设：在配置前先进行去初始化和重新初始化
  *       1. 配置过滤器：默认接收所有标准帧到指定的 FIFO
@@ -12,12 +13,12 @@
  *       3. 开启中断：根据传入的 FIFO 开启对应的中断源（含溢出、丢失等）
  *       4. 启动外设
  */
-void CAN_Config(hcan_t *hcan, uint32_t fifo)
+void CAN_Config(hcan_t *hcan, FDCAN_Work_Mode_e mode, uint32_t fifo)
 {
     // 重置FDCAN外设：去初始化后重新初始化，确保外设处于干净状态
     if (HAL_FDCAN_DeInit(hcan) != HAL_OK) Error_Handler();
-    // 配置FDCAN模式：上层统一走经典 CAN（RoboMaster 全链路经典帧，FD 暂不使用）
-    hcan->Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+    // 配置 FDCAN 模式：FD_5M 启用 FD + 比特率切换，CLASSIC_1M 走经典 CAN
+    hcan->Init.FrameFormat = (mode == FD_5M) ? FDCAN_FRAME_FD_BRS : FDCAN_FRAME_CLASSIC;
     if (HAL_FDCAN_Init(hcan) != HAL_OK) Error_Handler();
 
     FDCAN_FilterTypeDef sFilterConfig = {0};
