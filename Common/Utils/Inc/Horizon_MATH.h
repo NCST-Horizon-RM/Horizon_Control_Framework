@@ -24,7 +24,7 @@ float MATH_INV_SQRT_float(float DATA);
 /** 十六进制转浮点数 */
 float Hex_To_Float(uint32_t *Byte, int num);
 /** 浮点数转十六进制 */
-uint32_t FloatTohex(float HEX);
+uint32_t Float_To_Hex(float HEX);
 /** 浮点数线性映射为无符号整数 */
 int float_to_uint(float x_float, float x_min, float x_max, int bits);
 /** 无符号整数线性映射为浮点数 */

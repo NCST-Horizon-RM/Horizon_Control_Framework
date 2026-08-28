@@ -2,7 +2,7 @@
 // Created by CaoKangqi on 2026/6/25.
 //
 #include "Catapult_Ctrl.h"
-#include "Message_Center.h"
+#include "Robot_Config.h"
 #include "System_State.h"
 #include "Horizon_MATH.h"
 #include "BSP_TIM.h"
@@ -28,14 +28,7 @@
 // 静态实例化内部控制块
 static Shoot_Ctrl_Block_t shoot_ctrl = {0};
 
-// Pub/Sub 句柄与本地缓存
-static Subscriber_t *sys_state_sub;
-static Subscriber_t *shoot_cmd_sub;
-static Subscriber_t *gimbal_cmd_sub;
-
-static System_State_t local_sys_state;
-static Shoot_Cmd_t    local_shoot_cmd = {0};
-static Gimbal_Cmd_t   local_gimbal_cmd = {0};
+// 本地缓存
 // 扳机舵机
 BSP_PWM_t trigger_pwm = {&htim2, TIM_CHANNEL_1, PWM_CHANNEL_NORMAL};
 
@@ -72,10 +65,6 @@ uint8_t Shoot_Control_Init(void)
     PID_Init(&shoot_ctrl.PID_Pull_P, 2000, 100, PID_P_PULL, 0, 0, 0, 0, 0, mode);
     PID_Init(&shoot_ctrl.PID_Pull_S, 16000, 2000, PID_S_PULL, 0, 0, 0, 0, 0, mode);
 
-    sys_state_sub  = SubRegister("system_state", sizeof(System_State_t));
-    shoot_cmd_sub  = SubRegister("shoot_cmd", sizeof(Shoot_Cmd_t));
-    gimbal_cmd_sub = SubRegister("gimbal_cmd", sizeof(Gimbal_Cmd_t));
-
     System_State_Report(ID_SHOOT, STATUS_PREPARING);
 
     return 1;
@@ -92,9 +81,6 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *s_motor,
         return;
     }
 
-    if (sys_state_sub)  SubGetMessage(sys_state_sub, &local_sys_state);
-    if (shoot_cmd_sub)  SubGetMessage(shoot_cmd_sub, &local_shoot_cmd);
-    if (gimbal_cmd_sub) SubGetMessage(gimbal_cmd_sub, &local_gimbal_cmd);
 
     System_State_Report(ID_SHOOT, STATUS_RUN);
     System_State_Report(ID_GIMBAL, STATUS_RUN);
@@ -102,9 +88,9 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *s_motor,
     if (!Is_Group_Online(SHOOT))  System_State_Report(ID_SHOOT, STATUS_LOST);
     if (!Is_Group_Online(GIMBAL)) System_State_Report(ID_GIMBAL, STATUS_LOST);
 
-    bool is_system_locked = (local_sys_state.global_mode == GLOBAL_SAFE_LOCK ||
-                             local_sys_state.global_mode == GLOBAL_STANDBY ||
-                             local_sys_state.global_mode == GLOBAL_MODULE_ERROR);
+    bool is_system_locked = (sys_state.global_mode == GLOBAL_SAFE_LOCK ||
+                             sys_state.global_mode == GLOBAL_STANDBY ||
+                             sys_state.global_mode == GLOBAL_MODULE_ERROR);
 
     if (is_system_locked)
     {
@@ -176,7 +162,7 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *s_motor,
         shoot_ctrl.out_feed_torque = -shoot_ctrl.PID_Feed_S.Output;
 
         // Yaw轴逻辑 (仅使用 target_yaw)
-        shoot_ctrl.PID_Yaw_P.Ref += local_gimbal_cmd.target_yaw;
+        shoot_ctrl.PID_Yaw_P.Ref += gimbal_cmd.target_yaw;
         shoot_ctrl.PID_Yaw_P.Ref = MATH_Limit_float(shoot_ctrl.PID_Yaw_P.Ref,
                                                     shoot_ctrl.mid_offset_angle - YAW_CENTER_OFFSET,
                                                     shoot_ctrl.mid_offset_angle + YAW_CENTER_OFFSET);
@@ -218,8 +204,8 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *s_motor,
                     }
                 break;
             case PULL_STATE_STOPPED:
-                if (local_shoot_cmd.mode != SHOOT_CMD_SAFE &&
-                    local_shoot_cmd.trigger_single ) // 检测单发上升沿
+                if (shoot_cmd.mode != SHOOT_CMD_SAFE &&
+                    shoot_cmd.trigger_single ) // 检测单发上升沿
                 {
                     shoot_ctrl.out_trigger_pwm = TRIGGER_PWM_OPEN;
                     shoot_ctrl.pull_timer_sec = 0.0f;               // 清零延时计时
@@ -229,7 +215,7 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *s_motor,
         }
 
         shoot_ctrl.last_switch_v = current_switch_v;
-        shoot_ctrl.last_cmd_trigger = local_shoot_cmd.trigger_single;
+        shoot_ctrl.last_cmd_trigger = shoot_cmd.trigger_single;
 
         // 计算扳机电流
         PID_Calculate(&shoot_ctrl.PID_Pull_P, s_motor->DJI_3508_Pull.Angle_Infinite, shoot_ctrl.PID_Pull_P.Ref);

@@ -23,6 +23,9 @@ set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
 # MCU specific flags
 set(TARGET_FLAGS "-mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard ")
+# 工具链目标内核标记，供板级 CMakeLists 校验工具链与板卡是否匹配
+set(TOOLCHAIN_MCU "cortex-m7" CACHE STRING "工具链目标内核")
+set(TOOLCHAIN_BOARD "H723" CACHE STRING "工具链对应板卡")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${TARGET_FLAGS}")
 set(CMAKE_ASM_FLAGS "${CMAKE_C_FLAGS} -x assembler-with-cpp -MMD -MP")

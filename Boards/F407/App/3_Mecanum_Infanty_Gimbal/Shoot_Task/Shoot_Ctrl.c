@@ -2,7 +2,6 @@
 // Created by R0602 on 26-7-10.
 //
 #include "Shoot_Ctrl.h"
-#include "Message_Center.h"
 #include "System_State.h"
 #include "Robot_Config.h"
 #include "Robot_Cmd.h"
@@ -13,14 +12,6 @@
 #include "Vofa.h"
 //TODO:发射部分待完成
 static Shoot_Ctrl_Block_t shoot_ctrl;
-//订阅消息
-static Subscriber_t *sys_state_sub;
-static Subscriber_t *shoot_cmd_sub;
-static Subscriber_t *vt13_sub;
-//底盘本地变量，用于存储订阅消息
-static System_State_t local_sys_state;
-static Shoot_Cmd_t cmd = {0};
-static VT13_Typedef shoot_vt13;
 /**
  * @brief 发射机构控制初始化
  * @param MOTOR 发射机构电机总结构体指针
@@ -55,10 +46,6 @@ uint8_t Shoot_Control_Init(void)
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     //向系统下发发射当前状态，准备中
     System_State_Report(ID_SHOOT, STATUS_PREPARING);
-    //订阅系统状态、发射控制指令
-    sys_state_sub   = SubRegister("system_state", sizeof(System_State_t));
-    shoot_cmd_sub = SubRegister("shoot_cmd", sizeof(Shoot_Cmd_t));
-    vt13_sub      = SubRegister("vt13_data", sizeof(VT13_Typedef));
     return 1;
 }
 
@@ -69,11 +56,11 @@ void Smooth_Shoot_Control(void)
 {
     //连发
     shoot_ctrl.Feeder_Count.target_freq = MATH_Limit_float(shoot_ctrl.Feeder_Count.target_freq, 0.0f, 25.0f);
-    if (cmd.trigger_auto==1&&shoot_vt13.Remote.trigger==1)
+    if (shoot_cmd.trigger_auto==1&&VT13.Remote.trigger==1)
     {
         shoot_ctrl.use_smoothing=1;
     }
-    else if (cmd.trigger_auto ==1 && shoot_vt13.Remote.trigger  ==0)
+    else if (shoot_cmd.trigger_auto ==1 && VT13.Remote.trigger  ==0)
     {
         shoot_ctrl.use_smoothing=0;
     }
@@ -96,20 +83,16 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *g_motor, float dt)
         System_State_Report(ID_SHOOT, STATUS_ERROR);
         return;
     }
-    // 获取所有订阅数据
-    SubGetMessage(sys_state_sub, &local_sys_state);
-    if (shoot_cmd_sub) SubGetMessage(shoot_cmd_sub, &cmd);
-    if (vt13_sub) SubGetMessage(vt13_sub, &shoot_vt13);
     // 状态汇报
     if (!Is_Group_Online(SHOOT)) {
         System_State_Report(ID_SHOOT, STATUS_LOST);
     }
     else{System_State_Report(ID_SHOOT, STATUS_RUN);}
     // 判断系统状态
-    bool is_system_locked = (local_sys_state.global_mode == GLOBAL_SAFE_LOCK ||
-                             local_sys_state.global_mode == GLOBAL_STANDBY ||
-                             local_sys_state.global_mode == GLOBAL_INIT_STAGE);
-    if (cmd.mode == SHOOT_CMD_SAFE || is_system_locked)
+    bool is_system_locked = (sys_state.global_mode == GLOBAL_SAFE_LOCK ||
+                             sys_state.global_mode == GLOBAL_STANDBY ||
+                             sys_state.global_mode == GLOBAL_INIT_STAGE);
+    if (shoot_cmd.mode == SHOOT_CMD_SAFE || is_system_locked)
     {
         // 清空PID
         PID_Clear(&shoot_ctrl.Bmotor_P);
@@ -128,17 +111,17 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *g_motor, float dt)
                dt, &shoot_ctrl.Det_Count);
 
     // 根据剩余热量计算动态弹频
-    //shoot_ctrl.Feeder_Count.target_freq = Heat_Freq_Ctrl(0.4f,cmd.heat_max,cmd.heat_now,cmd.cool,bullet_fired,dt,18,10);
+    //shoot_ctrl.Feeder_Count.target_freq = Heat_Freq_Ctrl(0.4f,shoot_cmd.heat_max,shoot_cmd.heat_now,shoot_cmd.cool,bullet_fired,dt,18,10);
 
 //包含摩擦轮是否开启
-    if (cmd.mode == SHOOT_CMD_READY)
+    if (shoot_cmd.mode == SHOOT_CMD_READY)
     {
         shoot_ctrl.Lfire_speed = 0.0f;
         shoot_ctrl.Rfire_speed = 0.0f;
         shoot_ctrl.Bmotor_P.Ref = smooth_ref = g_motor->DJI_2006_bo.Angle_Infinite;
         shoot_ctrl.Feeder_Count.target_pos_cnt = (int32_t)ceilf(smooth_ref / (shoot_ctrl.Counts_Shoot) - 0.1f);
     }
-    if (cmd.mode == SHOOT_CMD_RUN || cmd.mode == SHOOT_CMD_FIRE) {
+    if (shoot_cmd.mode == SHOOT_CMD_RUN || shoot_cmd.mode == SHOOT_CMD_FIRE) {
         shoot_ctrl.Lfire_speed = -6500.0f;//左摩擦轮目标转速
         shoot_ctrl.Rfire_speed = 6500.0f;//右摩擦轮目标转速
         if (!is_init)
@@ -150,7 +133,7 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *g_motor, float dt)
         uint32_t now = HAL_GetTick();
         float interval = 1000.0f / shoot_ctrl.Feeder_Count.target_freq;
         //连发模式同时已经开启摩擦轮
-        if (cmd.mode == SHOOT_CMD_FIRE)
+        if (shoot_cmd.mode == SHOOT_CMD_FIRE)
         {
             Smooth_Shoot_Control();
             if (now - last_shot_time >= (uint32_t)interval) {
@@ -206,7 +189,7 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *g_motor, float dt)
 
     DJI_Motor_Send(&hcan2,0x200,shoot_ctrl.Lfire_S.Output,shoot_ctrl.Rfire_S.Output,0,0);
     DJI_Motor_Send(&hcan1,0x200,0,0,shoot_ctrl.Bmotor_S.Output,0 );
-    VOFA_JustFloat(&huart1, 5, cmd.heat_max,cmd.heat_now,cmd.cool,bullet_fired);
+    VOFA_JustFloat(&huart1, 5, shoot_cmd.heat_max,shoot_cmd.heat_now,shoot_cmd.cool,bullet_fired);
 }
 /**
  * @brief  动态 dt 射击检测函数

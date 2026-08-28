@@ -6,7 +6,6 @@
 #include "Robot_Config.h"
 #include "DBUS.h"
 #include "LED.h"
-#include "Message_Center.h"
 #include "Gimbal_Ctrl.h"
 #include "Shoot_Ctrl.h"
 #include "Robot_Cmd.h"
@@ -20,9 +19,6 @@ void Command_Task(void *argument)
     (void)argument;
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xTimeIncrement = pdMS_TO_TICKS(5);//绝对延时5ms
-    PubRegister("imu_data",   &IMU_Data,  sizeof(IMU_Data));
-    PubRegister("gimbal_motors",  &gimbal_motors,  sizeof(Gimbal_Motor_Group_t));
-    PubRegister("shoot_motors",  &shoot_motors,  sizeof(Shoot_Motor_Group_t));
     for(;;)
     {
         vTaskDelayUntil(&xLastWakeTime, xTimeIncrement);
@@ -71,13 +67,6 @@ void Motor_Task(void *argument)
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xTimeIncrement = pdMS_TO_TICKS(1);//绝对延时1ms
 
-    Subscriber_t *imu_sub = NULL;
-    Subscriber_t *g_motor_sub = NULL;
-    Subscriber_t *s_motor_sub = NULL;
-
-    imu_sub = SubRegister("imu_data", sizeof(IMU_Data_t));
-    g_motor_sub = SubRegister("gimbal_motors", sizeof(Gimbal_Motor_Group_t));
-    s_motor_sub = SubRegister("shoot_motors", sizeof(Shoot_Motor_Group_t));
     motor_DWT_Count = DWT->CYCCNT;
     Gimbal_Control_Init();
     Shoot_Control_Init();
@@ -86,10 +75,10 @@ void Motor_Task(void *argument)
         vTaskDelayUntil(&xLastWakeTime, xTimeIncrement);
         motor_period_s = DWT_GetDeltaT(&motor_DWT_Count);
 
-        if (imu_sub) SubGetMessage(imu_sub, &imu);
-        if (g_motor_sub) SubGetMessage(g_motor_sub, &gimbal_m);
-        if (s_motor_sub)  SubGetMessage(s_motor_sub, &shoot_m);
-        
+        imu = IMU_Data;
+        gimbal_m = gimbal_motors;
+        shoot_m = shoot_motors;
+
         Gimbal_Control_Task(&gimbal_m,&imu);
         Shoot_Control_Task(&shoot_m,motor_period_s);
     }
@@ -125,7 +114,7 @@ void MY_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM3) {
         DWT_SysTimeUpdate();
         Offline_Monitor();
-        System_State_Update();
+        System_State_Update(NULL);
         LED_Ticks();
         System_Indicator_Ticks();
     }

@@ -9,6 +9,11 @@
 #include "DJI_Motor.h"
 #include "DM_Motor.h"
 #include "LK_Motor.h"
+#include "Referee.h"
+#include "DBUS.h"
+#include "VT13.h"
+#include "Power_CAP.h"
+#include "DualBoard_Frame.h"
 
 typedef struct __attribute__((aligned(4))){
     DJI_MOTOR_DATA_Typedef DJI_3508_Chassis[4];
@@ -25,8 +30,12 @@ extern Chassis_Motor_Group_t chassis_motors;
 extern Gimbal_Motor_Group_t  gimbal_motors;
 extern Shoot_Motor_Group_t   shoot_motors;
 
-extern BSP_PWM_t imu_heater_pwm;
+extern Referee_Data_t Referee;
+extern DBUS_Typedef   DBUS;
+extern VT13_Typedef   VT13;
+extern Cap_t          cap;
+extern G2C_t          g2c;
 
-void Robot_Config_Init(void);
+extern BSP_PWM_t imu_heater_pwm;
 
 #endif //F4_FRAMEWORK_ROBOT_CONFIG_H

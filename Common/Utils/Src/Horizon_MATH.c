@@ -89,17 +89,22 @@ void MATH_SETBIT(unsigned char *byte, int position, int value)
 }
 
 /**
- * @brief   快速计算 float 平方根倒数（Quake 算法）
+ * @brief   快速计算 float 平方根倒数（Quake算法，一次牛顿迭代）
  * @param   x 需要计算平方根倒数的 float 数据
  * @return  平方根倒数
  */
 float MATH_INV_SQRT_float(float x)
 {
+    if (x <= 0.0f) return 0.0f;
     uint32_t i;
-    memcpy(&i, &x, 4); // 将 float 位拷贝给 uint32_t
+    float x2 = x * 0.5f;            // 牛顿迭代原始输入
+    float y  = x;
+
+    memcpy(&i, &y, 4);              // float 位模式转整数
     i = 0x5f3759df - (i >> 1);
-    memcpy(&x, &i, 4); // 再拷贝回来
-    return x * (1.5f - 0.5f * x * x * x);
+    memcpy(&y, &i, 4);              // 转回 float，y 为初始估计
+    y = y * (1.5f - (x2 * y * y));  // 牛顿修正：y *= 1.5 - (x/2)*y^2
+    return y;
 }
 
 /**
@@ -110,7 +115,10 @@ float MATH_INV_SQRT_float(float x)
  */
 float Hex_To_Float(uint32_t *Byte, int num)
 {
-    return *((float *)Byte);
+    (void)num;
+    float f;
+    memcpy(&f, Byte, 4);
+    return f;
 }
 
 /**
@@ -118,7 +126,7 @@ float Hex_To_Float(uint32_t *Byte, int num)
  * @param   HEX 待转换的浮点数
  * @return  浮点数位模式对应的 uint32_t
  */
-uint32_t FloatTohex(float HEX)
+uint32_t Float_To_Hex(float HEX)
 {
     uint32_t result;
     memcpy(&result, &HEX, 4);
@@ -136,10 +144,13 @@ uint32_t FloatTohex(float HEX)
  */
 int float_to_uint(float x_float, float x_min, float x_max, int bits)
 {
-    /* Converts a float to an unsigned int, given range and number of bits */
     float span = x_max - x_min;
-    float offset = x_min;
-    return (int)((x_float - offset) * ((float)((1 << bits) - 1)) / span);
+    if (span == 0.0f) return 0;
+
+    uint32_t max_val = (bits >= 32) ? 0xFFFFFFFFu : ((1u << bits) - 1u);
+
+    x_float = MATH_Limit_float(x_float, x_min, x_max);
+    return (uint32_t)((x_float - x_min) * ((float)max_val) / span);
 }
 
 /**
@@ -153,10 +164,12 @@ int float_to_uint(float x_float, float x_min, float x_max, int bits)
  */
 float uint_to_float(int x_int, float x_min, float x_max, int bits)
 {
-    /* converts unsigned int to float, given range and number of bits */
     float span = x_max - x_min;
-    float offset = x_min;
-    return ((float)x_int) * span / ((float)((1 << bits) - 1)) + offset;
+    if (span == 0.0f) return x_min;
+
+    uint32_t max_val = (bits >= 32) ? 0xFFFFFFFFu : ((1u << bits) - 1u);
+
+    return ((float)x_int) * span / ((float)max_val) + x_min;
 }
 
 /**
@@ -170,7 +183,7 @@ float uint_to_float(int x_int, float x_min, float x_max, int bits)
 int16_t OneFilter1(int16_t now, int16_t last, float thresholdValue)
 {
     const float alpha = 0.8f;
-    if (abs(now - last) >= thresholdValue)
+    if (fabsf((float)now - (float)last) >= thresholdValue)
         return (int16_t)(now * 0.2f + last * 0.8f); // 突变抑制
     else
         return (int16_t)(now * alpha + last * (1.0f - alpha));

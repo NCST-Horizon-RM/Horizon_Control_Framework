@@ -4,7 +4,7 @@
 #include "Chassis_Ctrl.h"
 #include "All_define.h"
 #include "Comm_DualBoard.h"
-#include "Message_Center.h"
+#include "Robot_Config.h"
 #include "Power_CAP.h"
 #include "Power_Ctrl.h"
 #include "Referee.h"
@@ -15,15 +15,6 @@ static Chassis_Ctrl_Block_t chassis_ctrl;
 
 Swerve_State_t S_Now;
 
-static Subscriber_t *sys_state_sub;
-static Subscriber_t *chassis_cmd_sub;
-static Subscriber_t *cap_sub;
-static Subscriber_t *referee_sub;
-
-static System_State_t local_sys_state;
-static Chassis_Cmd_t cmd = {0};
-static Cap_t local_cap_data;
-static Referee_Data_t chassis_referee;
 //功率控制
 static Power_Ctrl_t chassis_model;
 static Motor_Power_State_t m_states[8];//底盘共8个电机
@@ -88,11 +79,6 @@ uint8_t Chassis_Control_Init(void)
     pwr_groups[1].node_count = 4;
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
-    //订阅系统状态、底盘控制指令
-    sys_state_sub   = SubRegister("system_state", sizeof(System_State_t));
-    chassis_cmd_sub = SubRegister("chassis_cmd", sizeof(Chassis_Cmd_t));
-    cap_sub         = SubRegister("cap_data", sizeof(Cap_t));
-    referee_sub     = SubRegister("referee_data", sizeof(Referee_Data_t));
     return 1;
 }
 
@@ -105,19 +91,15 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt)
         System_State_Report(ID_CHASSIS, STATUS_ERROR);
         return;
     }
-    SubGetMessage(sys_state_sub, &local_sys_state);
-    if (chassis_cmd_sub) SubGetMessage(chassis_cmd_sub, &cmd);
-    if (cap_sub) SubGetMessage(cap_sub, &local_cap_data);
-    if (referee_sub) SubGetMessage(referee_sub, &chassis_referee);
     if (!Is_Group_Online(CHASSIS)) {
         System_State_Report(ID_CHASSIS, STATUS_LOST);
     }
     else{System_State_Report(ID_CHASSIS, STATUS_RUN);}
     // 判断系统状态
-    bool is_system_locked = (local_sys_state.global_mode == GLOBAL_SAFE_LOCK ||
-                             local_sys_state.global_mode == GLOBAL_STANDBY ||
-                             local_sys_state.global_mode == GLOBAL_INIT_STAGE);
-    if (cmd.mode == CHASSIS_CMD_SAFE || is_system_locked)
+    bool is_system_locked = (sys_state.global_mode == GLOBAL_SAFE_LOCK ||
+                             sys_state.global_mode == GLOBAL_STANDBY ||
+                             sys_state.global_mode == GLOBAL_INIT_STAGE);
+    if (chassis_cmd.mode == CHASSIS_CMD_SAFE || is_system_locked)
     {
         PID_Clear(&chassis_ctrl.PID_Vx);
         PID_Clear(&chassis_ctrl.PID_Vy);
@@ -141,9 +123,9 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt)
 
         Swerve_Forward_Calc(&S_Now, &chassis_ctrl.swerve_fb);
 
-        float vx_tar = cmd.target_vx;
-        float vy_tar = cmd.target_vy;
-        float vw_tar = cmd.target_vw;
+        float vx_tar = chassis_cmd.target_vx;
+        float vy_tar = chassis_cmd.target_vy;
+        float vw_tar = chassis_cmd.target_vw;
 
         PID_Calculate(&chassis_ctrl.PID_Vx, S_Now.vx, vx_tar);
         PID_Calculate(&chassis_ctrl.PID_Vy, S_Now.vy, vy_tar);
@@ -185,11 +167,11 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt)
         bool trigger_discharge = true;
         float cap_board_limit = 0.0f;
         float final_limit = 0.0f;
-        if (chassis_referee.offline.is_online) {
+        if (Referee.offline.is_online) {
             final_limit = Chassis_Power_Arbitrator(
-                                    chassis_referee.robot_status.chassis_power_limit,
-                                    chassis_referee.power_heat_data.buffer_energy,
-                                    1, &local_cap_data, &trigger_discharge, &cap_board_limit);
+                                    Referee.robot_status.chassis_power_limit,
+                                    Referee.power_heat_data.buffer_energy,
+                                    1, &cap, &trigger_discharge, &cap_board_limit);
         }
         else {
             trigger_discharge = FALSE;
@@ -206,8 +188,8 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt)
         CapSetData_t cap_cmd = {0};
         cap_cmd.Control.power_key     = 1;
         cap_cmd.Control.capPowerLimit = (uint8_t)cap_board_limit;
-        cap_cmd.Control.buffer_now    = (uint8_t)chassis_referee.power_heat_data.buffer_energy;
-        cap_cmd.Control.robot_state   = (chassis_referee.robot_status.current_HP > 0) ? 1 : 0;
+        cap_cmd.Control.buffer_now    = (uint8_t)Referee.power_heat_data.buffer_energy;
+        cap_cmd.Control.robot_state   = (Referee.robot_status.current_HP > 0) ? 1 : 0;
         Power_Cap_Tx(&hfdcan2, 0x252, &cap_cmd);
     }
     //电流发送

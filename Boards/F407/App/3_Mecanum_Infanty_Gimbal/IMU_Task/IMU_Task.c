@@ -11,7 +11,7 @@
 #include "BMI088.h"
 #include "BSP_TIM.h"
 #include "mahony_filter.h"
-#include "Message_Center.h"
+#include "Robot_Config.h"
 #include "QuaternionEKF.h"
 #include "System_State.h"
 #include "VQF_filter.h"
@@ -43,7 +43,6 @@ static uint32_t temp_stable_tick = 0;// 温度稳定计时起点
 static uint16_t imu_pid_cnt      = 0;//PID控制计数器，用于10ms分频执行PID计算
 static uint16_t gyro_calib_cnt   = 0;//陀螺仪校准计数
 static float heater_pwm_out   = 0;// 当前加热片PWM输出值
-static Publisher_t* imu_pub = NULL;
 static IMU_Fusion_Algo_e current_fusion_algo = VQF;
 /**
  * @brief 设置加热片PWM输出
@@ -186,12 +185,7 @@ void IMU_Update_Task(IMU_Data_t *IMU,float dt_s)
             }
 
             IMU_Fusion_Update(IMU, dt_s);
-            //注册IMU Topic
-            if (imu_pub == NULL) {
-                imu_pub = PubRegister("imu_data", IMU, sizeof(IMU));
-            }
             //发布IMU数据
-            PubPushMessage(imu_pub, IMU);
             imu_ctrl_flag.fusion_enabled = 1;
             break;
         case ERROR_STATE:

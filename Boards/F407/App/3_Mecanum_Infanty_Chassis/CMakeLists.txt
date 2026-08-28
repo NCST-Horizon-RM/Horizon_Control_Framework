@@ -42,8 +42,8 @@ target_compile_definitions(App_Module PRIVATE
         $<$<CONFIG:Release>:RELEASE_MODE>
 )
 
-# 链接底层的 stm32cubemx 驱动库
-target_link_libraries(App_Module PRIVATE stm32cubemx)
+# 链接底层驱动库与共享层（Common 的头目录经 PUBLIC 透传）
+target_link_libraries(App_Module PRIVATE stm32cubemx Common)
 
 # 获取并包含主项目（Core、Drivers等）的头文件路径
 get_target_property(FW_INCLUDES ${CMAKE_PROJECT_NAME} INCLUDE_DIRECTORIES)

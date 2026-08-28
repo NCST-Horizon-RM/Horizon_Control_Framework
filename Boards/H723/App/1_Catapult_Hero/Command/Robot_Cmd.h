@@ -51,6 +51,10 @@ typedef struct {
     uint8_t bullet_speed;    // 目标射速
 } Shoot_Cmd_t;
 
+extern Chassis_Cmd_t chassis_cmd;
+extern Gimbal_Cmd_t  gimbal_cmd;
+extern Shoot_Cmd_t   shoot_cmd;
+
 void Robot_Cmd_Init(void);
 void Robot_Cmd_Update(void);
 

@@ -39,8 +39,6 @@ void System_Init() {
     HAL_TIM_Base_Start_IT(&htim3);
     //BMI088初始化
     BMI088_Init();
-    //注册设备数据到数据中心(须在订阅方之前)
-    Robot_Config_Init();
     //系统状态监测初始化
     System_Indicator_Init();
     System_State_Init();

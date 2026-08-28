@@ -1,13 +1,10 @@
 #include "System_State.h"
 #include "hal.h"
 #include <string.h>
-#include "Message_Center.h"
 #include "Referee.h"
 #include "EventBus.h"
 
 System_State_t sys_state;
-static Subscriber_t *referee_sub = NULL;
-static Publisher_t  *sys_state_pub = NULL;
 
 static struct {
     bool ref_online;
@@ -40,9 +37,6 @@ void System_State_Init(void) {
     memset(&sys_state, 0, sizeof(sys_state));
     sys_state.global_mode = GLOBAL_INIT_STAGE;
 
-    referee_sub = SubRegister("referee_data", sizeof(Referee_Data_t));
-    sys_state_pub = PubRegister("system_state", &sys_state, sizeof(System_State_t));
-
     // 发布初始状态事件
     EventBus_Publish(EVENT_MODE_CHANGED, &sys_state.global_mode);
 }
@@ -54,21 +48,19 @@ void System_State_Report(Module_ID_e id, App_Status_e status) {
     }
 }
 
-void System_State_Update(void) {
+void System_State_Update(const Referee_Data_t *ref) {
     uint32_t now = HAL_GetTick();
     Referee_Data_t local_ref = {0};
 
-    if (referee_sub) SubGetMessage(referee_sub, &local_ref);
+    if (ref) {
+        local_ref = *ref;   // 快照，避免读裁判系统的途中被 UART ISR 改写
+    }
 
     Update_Power_Status(now, &local_ref);
     bool in_boot_grace_period = !Check_Boot_Sequence(now);
 
     Update_Error_Flags(g_remote_is_online, in_boot_grace_period);
     Arbitrate_Global_Mode(now);
-
-    if (sys_state_pub) {
-        PubPushMessage(sys_state_pub, &sys_state);
-    }
 }
 
 static void Update_Power_Status(uint32_t now, Referee_Data_t *ref) {

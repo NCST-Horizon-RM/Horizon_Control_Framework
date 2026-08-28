@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "Referee.h"
 
 typedef enum {
     STATUS_INIT,
@@ -61,7 +62,8 @@ extern System_State_t sys_state;
 
 void System_State_Init(void);
 void System_State_Report(Module_ID_e id, App_Status_e status);
-void System_State_Update(void);
+// 更新系统状态：ref 指向裁判系统数据（无裁判系统时传 NULL）
+void System_State_Update(const Referee_Data_t *ref);
 void System_State_Report_Remote(bool is_online);
 
 #endif // HORIZON_SYSTEM_STATE_H

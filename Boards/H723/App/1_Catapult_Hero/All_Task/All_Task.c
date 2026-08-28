@@ -7,7 +7,6 @@
 #include "Catapult_Ctrl.h"
 #include "Chassis_Ctrl.h"
 #include "DBUS.h"
-#include "Message_Center.h"
 #include "Power_CAP.h"
 #include "Referee.h"
 #include "Robot_Cmd.h"
@@ -25,11 +24,6 @@ void Command_Task(void *argument)
     (void)argument;
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xTimeIncrement = pdMS_TO_TICKS(5);//绝对延时5ms
-    PubRegister("imu_data",   &IMU_Data,  sizeof(IMU_Data));
-
-    PubRegister("chassis_motors", &chassis_motors, sizeof(Chassis_Motor_Group_t));
-    PubRegister("gimbal_motors",  &gimbal_motors,  sizeof(Gimbal_Motor_Group_t));
-    PubRegister("shoot_motors",   &shoot_motors,   sizeof(Shoot_Motor_Group_t));
 
     CMD_DWT_Count = DWT->CYCCNT;
     Robot_Cmd_Init();
@@ -78,16 +72,6 @@ void Motor_Task(void *argument)
     TickType_t xLastWakeTime = xTaskGetTickCount();
     const TickType_t xTimeIncrement = pdMS_TO_TICKS(1);//绝对延时1ms
 
-    Subscriber_t *imu_sub = NULL;
-    Subscriber_t *c_motor_sub = NULL;
-    Subscriber_t *g_motor_sub = NULL;
-    Subscriber_t *s_motor_sub = NULL;
-
-    imu_sub = SubRegister("imu_data", sizeof(IMU_Data_t));
-    c_motor_sub = SubRegister("chassis_motors", sizeof(Chassis_Motor_Group_t));
-    g_motor_sub = SubRegister("gimbal_motors", sizeof(Gimbal_Motor_Group_t));
-    s_motor_sub = SubRegister("shoot_motors", sizeof(Shoot_Motor_Group_t));
-
     motor_DWT_Count = DWT->CYCCNT;
     Chassis_Control_Init();
     //Shoot_Control_Init();
@@ -96,10 +80,10 @@ void Motor_Task(void *argument)
         vTaskDelayUntil(&xLastWakeTime, xTimeIncrement);
 
         motor_period_s = DWT_GetDeltaT(&motor_DWT_Count);
-        if (imu_sub) SubGetMessage(imu_sub, &imu);
-        if (c_motor_sub) SubGetMessage(c_motor_sub, &chassis_m);
-        if (g_motor_sub) SubGetMessage(g_motor_sub, &gimbal_m);
-        if (s_motor_sub)  SubGetMessage(s_motor_sub, &shoot_m);
+        imu = IMU_Data;
+        chassis_m = chassis_motors;
+        gimbal_m = gimbal_motors;
+        shoot_m = shoot_motors;
 
         //Shoot_Control_Task(&shoot_motors, &gimbal_motors,motor_period_s);
     }
@@ -147,7 +131,7 @@ void MY_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
         WS2812_Ticks();
         DWT_SysTimeUpdate();
         Offline_Monitor();
-        System_State_Update();
+        System_State_Update(&Referee);
         System_Indicator_Ticks();
     }
     //定时器6 500Hz

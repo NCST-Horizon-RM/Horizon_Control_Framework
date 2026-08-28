@@ -5,7 +5,6 @@
 
 #include "All_define.h"
 #include "Comm_DualBoard.h"
-#include "Message_Center.h"
 #include "System_State.h"
 #include "IMU_Task.h"
 #include "Robot_Config.h"
@@ -13,12 +12,6 @@
 #include "Vofa.h"
 
 static Gimbal_Ctrl_Block_t gimbal_ctrl;
-//订阅消息
-static Subscriber_t *sys_state_sub;
-static Subscriber_t *gimbal_cmd_sub;
-//底盘本地变量，用于存储订阅消息
-static System_State_t local_sys_state;
-static Gimbal_Cmd_t cmd = {0};
 
 
 /**
@@ -45,9 +38,6 @@ uint8_t Gimbal_Control_Init(void)
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_GIMBAL, STATUS_PREPARING);
-    //订阅系统状态、底盘控制指令
-    sys_state_sub   = SubRegister("system_state", sizeof(System_State_t));
-    gimbal_cmd_sub = SubRegister("gimbal_cmd", sizeof(Gimbal_Cmd_t));
     return 1;
 }
 /**
@@ -60,20 +50,17 @@ void Gimbal_Control_Task(const Gimbal_Motor_Group_t *g_motor,const IMU_Data_t *g
         System_State_Report(ID_GIMBAL, STATUS_ERROR);
         return;
     }
-    // 获取所有订阅数据
-    SubGetMessage(sys_state_sub, &local_sys_state);
-    if (gimbal_cmd_sub) SubGetMessage(gimbal_cmd_sub, &cmd);
     // 状态汇报
     if (!Is_Group_Online(GIMBAL)) {
         System_State_Report(ID_GIMBAL, STATUS_LOST);
     }
     else{System_State_Report(ID_GIMBAL, STATUS_RUN);}
     // 判断系统状态
-    bool is_system_locked = (local_sys_state.global_mode == GLOBAL_SAFE_LOCK ||
-                             local_sys_state.global_mode == GLOBAL_STANDBY ||
-                             local_sys_state.global_mode == GLOBAL_INIT_STAGE);
+    bool is_system_locked = (sys_state.global_mode == GLOBAL_SAFE_LOCK ||
+                             sys_state.global_mode == GLOBAL_STANDBY ||
+                             sys_state.global_mode == GLOBAL_INIT_STAGE);
 
-    if (cmd.mode == GIMBAL_CMD_SAFE || is_system_locked)
+    if (gimbal_cmd.mode == GIMBAL_CMD_SAFE || is_system_locked)
     {
         // 清空PID
         for (int i = 0; i < 4; i++) {
@@ -86,12 +73,12 @@ void Gimbal_Control_Task(const Gimbal_Motor_Group_t *g_motor,const IMU_Data_t *g
     }
     else
     {
-        gimbal_ctrl.Yaw_P.Ref = g_imu->yaw + normalize_to_pi((cmd.target_yaw - g_imu->yaw) * DEG2RAD) * RAD2DEG;
+        gimbal_ctrl.Yaw_P.Ref = g_imu->yaw + normalize_to_pi((gimbal_cmd.target_yaw - g_imu->yaw) * DEG2RAD) * RAD2DEG;
         PID_Calculate(&gimbal_ctrl.Yaw_P, g_imu->yaw, gimbal_ctrl.Yaw_P.Ref);
-        PID_Calculate(&gimbal_ctrl.Yaw_S,g_imu->gyro[2],gimbal_ctrl.Yaw_P.Output - 3*cmd.target_yaw_rate);
+        PID_Calculate(&gimbal_ctrl.Yaw_S,g_imu->gyro[2],gimbal_ctrl.Yaw_P.Output - 3*gimbal_cmd.target_yaw_rate);
 
-        PID_Calculate(&gimbal_ctrl.Pitch_P,g_imu->pitch,cmd.target_pitch);
-        PID_Calculate(&gimbal_ctrl.Pitch_S,g_imu->gyro[1],gimbal_ctrl.Pitch_P.Output + 3.5f*cmd.target_pitch_rate);
+        PID_Calculate(&gimbal_ctrl.Pitch_P,g_imu->pitch,gimbal_cmd.target_pitch);
+        PID_Calculate(&gimbal_ctrl.Pitch_S,g_imu->gyro[1],gimbal_ctrl.Pitch_P.Output + 3.5f*gimbal_cmd.target_pitch_rate);
     }
 
     DM_Motor_Send(&hcan1, 0x3FE,

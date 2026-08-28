@@ -55,9 +55,9 @@ Boards/<board>/
 
 设备数据(遥控、裁判、图传、电容等)不定义在 `Common/`,而是由每块板的 `Robot_Config.c` 以 `static` 实例私有持有,再经发布/订阅对外提供:
 
-- `Robot_Config.c` 定义 `static` 数据实例与接收缓冲,并在 `Robot_Config_Init()` 中 `PubRegister` 注册主题。
-- 设备解析函数(`Common/` 中的纯函数)通过 `device_ptr` 写入该实例。
-- 上层模块一律通过 `SubRegister` + `SubGetMessage` 读取快照,无任何头文件暴露实例。
+- `Robot_Config.c` 定义 `static` 数据实例与接收缓冲,并实例化发布订阅槽位表 `g_topics[]`(`PubSub.h` 中的 `TOPIC_*` 枚举集中命名,topic 拼错即编译错误)。
+- 设备解析函数(`Common/` 中的纯函数)通过 `device_ptr` 写入该实例,再由 `Robot_Config.c` 里的包装回调 `PubSub_Publish` 发布到总线。
+- 上层模块一律通过 `PubSub_Read(&g_topics[TOPIC_XXX], ...)` 读取最新快照,无任何头文件暴露实例。
 
 新增板卡时,须按自身接线在 `Robot_Config.c` 中声明所需数据实例并注册,而非沿用旧板卡的头文件声明。
 
@@ -108,7 +108,7 @@ CubeMX 生成的链接脚本不包含自定义注册段。须在 `.rodata` 之�
 
 ### 4.6 配置 App
 
-- `Robot_Config.c`:声明所需设备数据 `static` 实例与接收缓冲;将 `CAN_RX_NODE`、`UART_RX_NODE`、`OFFLINE_NODE` 中的实例名与句柄替换为芯片实际符号;新增 `Robot_Config_Init()` 完成 `PubRegister`。
+- `Robot_Config.c`:声明所需设备数据 `static` 实例与接收缓冲;将 `CAN_RX_NODE`、`UART_RX_NODE`、`OFFLINE_NODE` 中的实例名与句柄替换为芯片实际符号;实例化 `g_topics[]` 槽位表,并为各设备添加"解析 + `PubSub_Publish`"的包装回调。
 - `System_Init.c`:实现外设初始化、电源 GPIO 控制、`DWT_Init(主频MHz)`、`CAN_Config`、`Auto_UART_Router_Init`、指示灯与传感器初始化,并在订阅方之前调用 `Robot_Config_Init()`。
 - `Core/Src/main.c`:保留 `extern void System_Init(void);` 与 `extern void MY_TIM_PeriodElapsedCallback(...)`,并在外设初始化后调用 `System_Init()`。
 

@@ -3,7 +3,7 @@
 //
 #include "Chassis_Ctrl.h"
 #include "Comm_DualBoard.h"
-#include "Message_Center.h"
+#include "Robot_Config.h"
 #include "Power_CAP.h"
 #include "Power_Ctrl.h"
 #include "Referee.h"
@@ -11,16 +11,6 @@
 #include "Robot_Cmd.h"
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
-//订阅消息
-static Subscriber_t *sys_state_sub;
-static Subscriber_t *chassis_cmd_sub;
-static Subscriber_t *cap_sub;
-static Subscriber_t *referee_sub;
-//底盘本地变量，用于存储订阅消息
-static System_State_t local_sys_state;
-static Chassis_Cmd_t cmd = {0};
-static Cap_t local_cap_data;
-static Referee_Data_t chassis_referee;
 //功率控制
 static Power_Ctrl_t chassis_model;
 static Motor_Power_State_t m_states[4];//底盘共4个电机
@@ -109,11 +99,6 @@ uint8_t Chassis_Control_Init(void)
     pwr_groups[0].node_count = 4;
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
-    //订阅系统状态、底盘控制指令
-    sys_state_sub   = SubRegister("system_state", sizeof(System_State_t));
-    chassis_cmd_sub = SubRegister("chassis_cmd", sizeof(Chassis_Cmd_t));
-    cap_sub         = SubRegister("cap_data", sizeof(Cap_t));
-    referee_sub     = SubRegister("referee_data", sizeof(Referee_Data_t));
     return 1;
 }
 
@@ -128,22 +113,17 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
         return;
     }
     static float cur_vx_gimbal = 0.0f, cur_vy_gimbal = 0.0f, cur_vw = 0.0f;
-    // 获取所有订阅数据
-    SubGetMessage(sys_state_sub, &local_sys_state);
-    if (chassis_cmd_sub) SubGetMessage(chassis_cmd_sub, &cmd);
-    if (cap_sub) SubGetMessage(cap_sub, &local_cap_data);
-    if (referee_sub) SubGetMessage(referee_sub, &chassis_referee);
     // 状态汇报
     if (!Is_Group_Online(CHASSIS)) {
         System_State_Report(ID_CHASSIS, STATUS_LOST);
     }
     else{System_State_Report(ID_CHASSIS, STATUS_RUN);}
     // 判断系统状态
-    bool is_system_locked = (local_sys_state.global_mode == GLOBAL_SAFE_LOCK ||
-                             local_sys_state.global_mode == GLOBAL_STANDBY ||
-                             local_sys_state.global_mode == GLOBAL_INIT_STAGE);
+    bool is_system_locked = (sys_state.global_mode == GLOBAL_SAFE_LOCK ||
+                             sys_state.global_mode == GLOBAL_STANDBY ||
+                             sys_state.global_mode == GLOBAL_INIT_STAGE);
 
-    if (cmd.mode == CHASSIS_CMD_SAFE || is_system_locked)
+    if (chassis_cmd.mode == CHASSIS_CMD_SAFE || is_system_locked)
     {
         // 清空PID
         for (int i = 0; i < 4; i++) {
@@ -158,19 +138,19 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
     }
     else
     {
-        float vw_tar = cmd.target_vw;
+        float vw_tar = chassis_cmd.target_vw;
         // 底盘跟随模式下，计算底盘跟随PID
-        if (cmd.mode == CHASSIS_CMD_FOLLOW) {
-            PID_Calculate(&chassis_ctrl.Follow_Pos, cmd.offset_angle, 0.0f);
+        if (chassis_cmd.mode == CHASSIS_CMD_FOLLOW) {
+            PID_Calculate(&chassis_ctrl.Follow_Pos, chassis_cmd.offset_angle, 0.0f);
             vw_tar = PID_Calculate(&chassis_ctrl.Follow_Spd, imu->gyro[2], chassis_ctrl.Follow_Pos.Output);
         }
         // 非对称梯形加减速
-        cur_vx_gimbal = Ramp_Calc(cmd.target_vx, cur_vx_gimbal, 5.0f, 100.0f,dt);
-        cur_vy_gimbal = Ramp_Calc(cmd.target_vy, cur_vy_gimbal, 5.0f, 100.0f,dt);
+        cur_vx_gimbal = Ramp_Calc(chassis_cmd.target_vx, cur_vx_gimbal, 5.0f, 100.0f,dt);
+        cur_vy_gimbal = Ramp_Calc(chassis_cmd.target_vy, cur_vy_gimbal, 5.0f, 100.0f,dt);
         cur_vw        = Ramp_Calc(vw_tar,        cur_vw,        350.0f,  400.0f,dt);
         // 底盘坐标系旋转矩阵
-        float cos_theta = arm_cos_f32(cmd.offset_angle);
-        float sin_theta = arm_sin_f32(cmd.offset_angle);
+        float cos_theta = arm_cos_f32(chassis_cmd.offset_angle);
+        float sin_theta = arm_sin_f32(chassis_cmd.offset_angle);
         float cur_vx_chassis = cur_vx_gimbal * cos_theta + cur_vy_gimbal * sin_theta;
         float cur_vy_chassis = cur_vy_gimbal * cos_theta - cur_vx_gimbal * sin_theta;
         // 逆运动学与速度环 PID 计算
@@ -185,14 +165,14 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
             m_states[i].speed_rpm = c_motor->DJI_3508_Chassis[i].Speed_now;
             m_states[i].original_cmd = chassis_ctrl.Drive_S[i].Output;
         }
-        bool trigger_discharge = cmd.is_cap_on;// 输入电容开启标志
+        bool trigger_discharge = chassis_cmd.is_cap_on;// 输入电容开启标志
         float cap_board_limit = 0.0f;
         float final_limit = 0.0f;
-        if (chassis_referee.offline.is_online) {
+        if (Referee.offline.is_online) {
             final_limit = Chassis_Power_Arbitrator(
-                                    chassis_referee.robot_status.chassis_power_limit,
-                                    chassis_referee.power_heat_data.buffer_energy,
-                                    1, &local_cap_data, &trigger_discharge, &cap_board_limit);
+                                    Referee.robot_status.chassis_power_limit,
+                                    Referee.power_heat_data.buffer_energy,
+                                    1, &cap, &trigger_discharge, &cap_board_limit);
         }
         else {
             trigger_discharge = FALSE;
@@ -207,8 +187,8 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
         CapSetData_t cap_cmd = {0};
         cap_cmd.Control.power_key     = trigger_discharge;
         cap_cmd.Control.capPowerLimit = (uint8_t)cap_board_limit;
-        cap_cmd.Control.buffer_now    = (uint8_t)chassis_referee.power_heat_data.buffer_energy;
-        cap_cmd.Control.robot_state   = (chassis_referee.robot_status.current_HP > 0) ? 1 : 0;
+        cap_cmd.Control.buffer_now    = (uint8_t)Referee.power_heat_data.buffer_energy;
+        cap_cmd.Control.robot_state   = (Referee.robot_status.current_HP > 0) ? 1 : 0;
         Power_Cap_Tx(&hcan1, 0x252, &cap_cmd);
     }
 
