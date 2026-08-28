@@ -9,7 +9,7 @@ extern const Auto_Offline_Reg_t __stop_Offline_Reg_Sec __attribute__((weak));
 
 void Offline_Monitor(void)
 {
-    if (&__start_Offline_Reg_Sec == NULL) {
+    if (&__start_Offline_Reg_Sec == &__stop_Offline_Reg_Sec) {
         return;
     }
     uint32_t now = HAL_GetTick();
@@ -30,7 +30,7 @@ void Offline_Monitor(void)
 
 bool Is_Group_Online(Device_Group_e group)
 {
-    if (&__start_Offline_Reg_Sec == NULL) {
+    if (&__start_Offline_Reg_Sec == &__stop_Offline_Reg_Sec) {
         return true;
     }
     const Auto_Offline_Reg_t *reg = &__start_Offline_Reg_Sec;

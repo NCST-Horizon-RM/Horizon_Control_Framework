@@ -14,7 +14,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 #               CMakePresets.json 通过 toolchainFile 选择工具链，即选定板卡。
 # ACTIVE_APP:   对应板卡 App/ 下的机器人目录名
 set(ACTIVE_BOARD "${TOOLCHAIN_BOARD}")
-set(ACTIVE_APP  "3_Mecanum_Infanty_Chassis")
+if(NOT DEFINED ACTIVE_APP)
+    set(ACTIVE_APP "1_Catapult_Hero")
+endif()
 
 # ---- 校验 ACTIVE_BOARD:板卡目录不存在直接报错 ----
 if(NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Boards/${ACTIVE_BOARD}/cmake/stm32cubemx")

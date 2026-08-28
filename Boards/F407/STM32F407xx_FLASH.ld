@@ -90,17 +90,6 @@ SECTIONS
 
     KEEP (*(.init))
     KEEP (*(.fini))
-/* ==================== 在这里或这里附近插入你的自定义段 ==================== */
-    . = ALIGN(4);
-    __start_CAN_Reg_Sec = .;
-    KEEP(*(CAN_Reg_Sec))
-    __stop_CAN_Reg_Sec = .;
-
-    . = ALIGN(4);
-    __start_UART_Reg_Sec = .;
-    KEEP(*(UART_Reg_Sec))
-    __stop_UART_Reg_Sec = .;
-    /* ==================================================================== */
     . = ALIGN(4);
     _etext = .;        /* define a global symbols at end of code */
   } >FLASH
