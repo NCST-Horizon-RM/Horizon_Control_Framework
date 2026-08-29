@@ -1,5 +1,6 @@
 build/
 .claude
+.agents
 H7_Framework.jdebug
 H7_Framework.jdebug.user
 H7-GDB.jdebug
@@ -8,6 +9,8 @@ H7-GDB.jdebug.user
 .idea/
 .vscode/
 .clangd
+CMakeUserPresets.json
+__pycache__/
 .ideagit rm -r --cached .
 mx.scratch
 H7一键启动OpenOCD.bat

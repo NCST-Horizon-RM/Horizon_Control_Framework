@@ -139,18 +139,24 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -T \"${CMAKE_SOURCE_DIR}/B
 
 ### 5.3 预设
 
-在 `CMakePresets.json` 中新增配置预设与构建预设,`toolchainFile` 指向新板卡,`ACTIVE_BOARD` 与 `ACTIVE_APP` 设为板卡与机器人的组合。
+不要手动维护 `CMakePresets.json` 中的 App 列表。新增板卡或 App 后运行:
+
+```bash
+python scripts/generate_cmake_presets.py
+```
+
+脚本会扫描 `Boards/*/App/*/CMakeLists.txt`,为每个板卡与 App 组合生成 Debug/Release 预设。`toolchainFile` 指向对应板卡,`ACTIVE_APP` 指向对应机器人应用。
 
 ## 6. 验证
 
 ```bash
-cmake --preset <board>-Debug
-cmake --build build/<board>-Debug
+cmake --preset <board>-<app>-Debug
+cmake --build build/<board>-<app>-Debug
 ```
 
 构建完成后应确认:
 
-1. `.elf`、`.hex`、`.bin` 均生成于 `build/<board>-Debug/`。
+1. `.elf`、`.hex`、`.bin` 均生成于 `build/<board>-<app>-Debug/`。
 2. 链接映射文件(`.map`)中 `Offline_Reg_Sec` 段非空(存在实际注册节点),`CAN_Reg_Sec`、`UART_Reg_Sec` 落段正确。
 
 ## 7. 注意事项

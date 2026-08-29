@@ -1,0 +1,78 @@
+name: 硬件测试记录
+description: 记录实车、外设、板卡或通信链路测试结果
+title: "[hardware-test] "
+labels: ["hardware-test", "test"]
+body:
+  - type: input
+    id: tester
+    attributes:
+      label: 测试人
+      placeholder: 例如:张三
+    validations:
+      required: true
+
+  - type: input
+    id: date
+    attributes:
+      label: 测试日期
+      placeholder: 例如:2026-08-30
+    validations:
+      required: true
+
+  - type: input
+    id: board
+    attributes:
+      label: 板卡
+      description: 填写 `Boards/` 下的目录名。多板卡测试请全部列出。
+      placeholder: 例如:H723 / F407 / 多板卡
+    validations:
+      required: true
+
+  - type: input
+    id: app
+    attributes:
+      label: App/Profile
+      placeholder: 例如:H723-1_Catapult_Hero-Debug
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: 硬件环境
+      description: 说明电机、遥控、裁判、电容、传感器、接线和供电情况。
+    validations:
+      required: true
+
+  - type: textarea
+    id: items
+    attributes:
+      label: 测试项目
+      placeholder: |
+        - [ ] CAN 电机收发
+        - [ ] UART 遥控接收
+        - [ ] IMU 零偏和温控
+        - [ ] 离线检测和状态切换
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: 测试结果
+      description: 写明通过、失败、偶发异常或待复测项。
+    validations:
+      required: true
+
+  - type: textarea
+    id: data
+    attributes:
+      label: 关键数据
+      description: 任务周期、CAN 丢包、温度、yaw 漂移、功率限制、电机反馈等。
+      render: text
+
+  - type: textarea
+    id: follow_up
+    attributes:
+      label: 后续处理
+      description: 需要开的 bug、待复测内容或临时规避措施。

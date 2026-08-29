@@ -8,42 +8,84 @@
             "binaryDir": "${sourceDir}/build/${presetName}"
         },
         {
-            "name": "F407-Debug",
+            "name": "F407-3_Mecanum_Infanty_Chassis-Debug",
             "inherits": "base",
             "toolchainFile": "${sourceDir}/Boards/F407/cmake/gcc-arm-none-eabi.cmake",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ACTIVE_APP": "3_Mecanum_Infanty_Chassis"
             }
         },
         {
-            "name": "F407-Release",
+            "name": "F407-3_Mecanum_Infanty_Chassis-Release",
             "inherits": "base",
             "toolchainFile": "${sourceDir}/Boards/F407/cmake/gcc-arm-none-eabi.cmake",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
+                "CMAKE_BUILD_TYPE": "Release",
+                "ACTIVE_APP": "3_Mecanum_Infanty_Chassis"
             }
         },
         {
-            "name": "H723-Debug",
+            "name": "F407-3_Mecanum_Infanty_Gimbal-Debug",
             "inherits": "base",
-            "toolchainFile": "${sourceDir}/Boards/H723/cmake/gcc-arm-none-eabi.cmake",
+            "toolchainFile": "${sourceDir}/Boards/F407/cmake/gcc-arm-none-eabi.cmake",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ACTIVE_APP": "3_Mecanum_Infanty_Gimbal"
             }
         },
         {
-            "name": "H723-Release",
+            "name": "F407-3_Mecanum_Infanty_Gimbal-Release",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/Boards/F407/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ACTIVE_APP": "3_Mecanum_Infanty_Gimbal"
+            }
+        },
+        {
+            "name": "H723-1_Catapult_Hero-Debug",
             "inherits": "base",
             "toolchainFile": "${sourceDir}/Boards/H723/cmake/gcc-arm-none-eabi.cmake",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ACTIVE_APP": "1_Catapult_Hero"
+            }
+        },
+        {
+            "name": "H723-1_Catapult_Hero-Release",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/Boards/H723/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ACTIVE_APP": "1_Catapult_Hero"
             }
         }
     ],
     "buildPresets": [
-        { "name": "F407-Debug", "configurePreset": "F407-Debug" },
-        { "name": "F407-Release", "configurePreset": "F407-Release" },
-        { "name": "H723-Debug", "configurePreset": "H723-Debug" },
-        { "name": "H723-Release", "configurePreset": "H723-Release" }
+        {
+            "name": "F407-3_Mecanum_Infanty_Chassis-Debug",
+            "configurePreset": "F407-3_Mecanum_Infanty_Chassis-Debug"
+        },
+        {
+            "name": "F407-3_Mecanum_Infanty_Chassis-Release",
+            "configurePreset": "F407-3_Mecanum_Infanty_Chassis-Release"
+        },
+        {
+            "name": "F407-3_Mecanum_Infanty_Gimbal-Debug",
+            "configurePreset": "F407-3_Mecanum_Infanty_Gimbal-Debug"
+        },
+        {
+            "name": "F407-3_Mecanum_Infanty_Gimbal-Release",
+            "configurePreset": "F407-3_Mecanum_Infanty_Gimbal-Release"
+        },
+        {
+            "name": "H723-1_Catapult_Hero-Debug",
+            "configurePreset": "H723-1_Catapult_Hero-Debug"
+        },
+        {
+            "name": "H723-1_Catapult_Hero-Release",
+            "configurePreset": "H723-1_Catapult_Hero-Release"
+        }
     ]
 }

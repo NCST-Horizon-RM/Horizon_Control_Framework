@@ -12,10 +12,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ================= 板卡 / 机器人选择 =================
 # ACTIVE_BOARD: 由工具链文件声明（Boards/<board>/cmake/*.cmake 里的 TOOLCHAIN_BOARD）。
 #               CMakePresets.json 通过 toolchainFile 选择工具链，即选定板卡。
-# ACTIVE_APP:   对应板卡 App/ 下的机器人目录名
+# ACTIVE_APP:   对应板卡 App/ 下的机器人目录名,由预设或命令行参数注入
 set(ACTIVE_BOARD "${TOOLCHAIN_BOARD}")
-if(NOT DEFINED ACTIVE_APP)
-    set(ACTIVE_APP "1_Catapult_Hero")
+if(NOT DEFINED ACTIVE_APP OR ACTIVE_APP STREQUAL "")
+    message(FATAL_ERROR
+        "ACTIVE_APP 未指定。请在 CLion 的 CMake Profile 中选择具体 App 配置，"
+        "或运行 scripts/generate_cmake_presets.py 生成官方配置。")
 endif()
 
 # ---- 校验 ACTIVE_BOARD:板卡目录不存在直接报错 ----

@@ -1,0 +1,107 @@
+name: Bug 报告
+description: 记录可复现的代码、构建、通信或实车异常
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请尽量给出可复现信息。没有板卡、App、现象和最近改动的问题,很难被有效定位。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题描述
+      description: 简要说明出现了什么异常。
+      placeholder: 例如:H723 英雄 App 中底盘电机上电后无输出。
+    validations:
+      required: true
+
+  - type: input
+    id: board
+    attributes:
+      label: 板卡
+      description: 填写 `Boards/` 下的目录名。多板卡问题请全部列出。
+      placeholder: 例如:H723 / F407 / 多板卡均存在
+    validations:
+      required: true
+
+  - type: input
+    id: app
+    attributes:
+      label: App
+      description: 填写 `Boards/<board>/App/` 下的目录名。
+      placeholder: 例如:1_Catapult_Hero
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: 影响模块
+      options:
+        - App
+        - BSP
+        - Common/Device
+        - Common/Algorithm
+        - Common/System
+        - CMake/CI
+        - 文档
+        - 不确定
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 按顺序写出怎么触发问题。
+      placeholder: |
+        1. 切换到 H723-1_Catapult_Hero-Debug
+        2. 编译并下载固件
+        3. 打开遥控器并使能底盘
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际现象
+      description: 串口输出、CAN 现象、LED/蜂鸣器状态、调试截图或日志。
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望现象
+      description: 正常情况下应该发生什么。
+    validations:
+      required: true
+
+  - type: textarea
+    id: recent_changes
+    attributes:
+      label: 最近改动
+      description: 最近改过哪些文件、配置、接线或参数。
+      placeholder: 例如:修改了 Robot_Config.c 中 CAN ID,调整了 TIM 频率。
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 证据材料
+      description: 粘贴关键日志、编译错误、截图说明或示波器/CAN 分析仪现象。
+      render: text
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经确认当前分支基于最新主分支。
+        - label: 我已经说明使用的板卡和 App。
+          required: true
+        - label: 我已经提供复现步骤或说明为什么无法复现。
+          required: true
+        - label: 我已经说明是否进行过硬件测试。
+          required: true
