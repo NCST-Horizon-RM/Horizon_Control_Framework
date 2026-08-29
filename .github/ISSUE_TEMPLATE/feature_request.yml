@@ -1,0 +1,65 @@
+name: 功能需求
+description: 提出新的驱动、算法、App 能力或框架能力
+title: "[feature] "
+labels: ["feature"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 说明希望新增什么能力,以及为什么需要。
+      placeholder: 例如:为 H723 新增一个工程机器人 App,复用现有 CAN/UART/BSP 接口。
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影响范围
+      options:
+        - App
+        - BSP
+        - Common/Device
+        - Common/Algorithm
+        - Common/System
+        - CMake/CI
+        - 文档
+        - 多模块
+    validations:
+      required: true
+
+  - type: textarea
+    id: boards_apps
+    attributes:
+      label: 涉及板卡和 App
+      description: 列出需要支持或不能破坏的板卡/App。
+      placeholder: |
+        - H723 / 1_Catapult_Hero
+        - F407 / 3_Mecanum_Infanty_Chassis
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: 初步方案
+      description: 如果已有想法,说明接口、数据流、任务周期、外设资源或控制逻辑。
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 写清楚做到什么程度算完成。
+      placeholder: |
+        - [ ] 相关 Profile 编译通过
+        - [ ] 不破坏现有板卡/App
+        - [ ] 已完成必要硬件测试或明确标记未测试
+        - [ ] 文档已更新
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: 风险和限制
+      description: 说明可能影响的模块、硬件资源、时序或兼容性问题。

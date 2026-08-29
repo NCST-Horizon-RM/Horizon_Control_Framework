@@ -16,6 +16,8 @@
 
 Issue 是任务单,用于记录 bug、需求、重构、文档和硬件测试项。任何需要别人处理或跟踪的事情都应该开 Issue。
 
+GitHub 新建 Issue 时会自动显示模板。优先选择对应模板填写,不要直接开空白 Issue。
+
 ### 2.1 Issue 类型
 
 - `bug`: 已知错误或异常现象。
@@ -128,6 +130,8 @@ python scripts/generate_cmake_presets.py
 
 PR 是 Pull Request,即“请求把当前分支的代码合并进主分支”。PR 用来展示改动、跑 CI、接受 Review,最后再合并。
 
+GitHub 新建 PR 时会自动带出描述模板。提交前应补全改动内容、测试情况和风险说明。
+
 ### 5.1 提交 PR 前
 
 提交 PR 前至少确认:
@@ -152,10 +156,24 @@ Closes #
 
 ## 测试情况
 
-- [ ] F407 Debug 编译通过
-- [ ] F407 Release 编译通过
-- [ ] H723 Debug 编译通过
-- [ ] H723 Release 编译通过
+固件编译:
+
+- [ ] GitHub Actions `Build Firmware` 通过
+- [ ] 本地编译通过
+
+脚本/静态检查:
+
+- [ ] `python scripts/generate_cmake_presets.py --check` 通过
+- [ ] `python -m json.tool CMakePresets.json` 通过
+
+本地验证的 Profile:
+
+```text
+未进行 / 填写实际验证过的 Profile
+```
+
+硬件测试:
+
 - [ ] 已完成硬件测试
 - [ ] 暂无硬件测试条件
 
