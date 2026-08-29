@@ -8,6 +8,7 @@ H7-GDB.jdebug.user
 .idea/
 .vscode/
 .clangd
+CMakeUserPresets.json
 .ideagit rm -r --cached .
 mx.scratch
 H7一键启动OpenOCD.bat

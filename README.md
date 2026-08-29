@@ -54,23 +54,28 @@ Horizon_Control_Framework/
 ### 构建
 
 ```bash
-cmake --preset H723-Debug
-cmake --build build/H723-Debug
+cmake --preset H723-1_Catapult_Hero-Debug
+cmake --build build/H723-1_Catapult_Hero-Debug
 ```
 
-编译产物位于 `build/H723-Debug/`,包括 `.elf`、`.hex`、`.bin`。
+编译产物位于 `build/<preset-name>/`,包括 `.elf`、`.hex`、`.bin`。
 
 ## 板卡与机器人选择
 
-- `ACTIVE_BOARD`:目标板卡,对应 `Boards/` 下的目录名(如 `F407`、`H723`)。
-- `ACTIVE_APP`:机器人应用,对应板卡 `App/` 下的目录名。
+- `ACTIVE_BOARD`:目标板卡,由 `CMakePresets.json` 中的 `toolchainFile` 间接选择。
+- `ACTIVE_APP`:机器人应用,由 `CMakePresets.json` 注入,对应板卡 `App/` 下的目录名。
 
-预设提供常用组合(`F407-Debug`、`H723-Debug` 等),也可在配置阶段覆盖单个变量:
+预设按 `板卡-App-构建类型` 命名,例如:
 
-```bash
-cmake --preset H723-Debug -DACTIVE_APP=2_Engineer
+```text
+H723-1_Catapult_Hero-Debug
+F407-3_Mecanum_Infanty_Chassis-Debug
+F407-3_Mecanum_Infanty_Gimbal-Debug
 ```
+
+新增 App 后运行 `scripts/generate_cmake_presets.py` 更新官方预设。个人本地配置放在 `CMakeUserPresets.json`,该文件不会提交到仓库。
 
 ## 文档
 
 - [新增板卡指南](Boards/README.md)
+- [协作流程](CONTRIBUTING.md)

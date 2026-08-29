@@ -13,6 +13,10 @@ jobs:
       matrix: ${{ steps.set.outputs.matrix }}
     steps:
       - uses: actions/checkout@v5
+
+      - name: Verify generated CMake presets
+        run: python3 scripts/generate_cmake_presets.py --check
+
       - id: set
         run: |
           matrix=$(for d in Boards/*/App/*; do
