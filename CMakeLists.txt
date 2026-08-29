@@ -12,7 +12,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ================= 板卡 / 机器人选择 =================
 # ACTIVE_BOARD: 由工具链文件声明（Boards/<board>/cmake/*.cmake 里的 TOOLCHAIN_BOARD）。
 #               CMakePresets.json 通过 toolchainFile 选择工具链，即选定板卡。
-# ACTIVE_APP:   对应板卡 App/ 下的机器人目录名,由 CMakePresets.json 注入
+# ACTIVE_APP:   对应板卡 App/ 下的机器人目录名,由预设或命令行参数注入
 set(ACTIVE_BOARD "${TOOLCHAIN_BOARD}")
 if(NOT DEFINED ACTIVE_APP OR ACTIVE_APP STREQUAL "")
     message(FATAL_ERROR

@@ -156,7 +156,7 @@ cmake --build build/<board>-<app>-Debug
 
 构建完成后应确认:
 
-1. `.elf`、`.hex`、`.bin` 均生成于 `build/<board>-Debug/`。
+1. `.elf`、`.hex`、`.bin` 均生成于 `build/<board>-<app>-Debug/`。
 2. 链接映射文件(`.map`)中 `Offline_Reg_Sec` 段非空(存在实际注册节点),`CAN_Reg_Sec`、`UART_Reg_Sec` 落段正确。
 
 ## 7. 注意事项

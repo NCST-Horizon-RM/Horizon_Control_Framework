@@ -4,7 +4,7 @@
 
 ## 1. 基本原则
 
-1. `master` 分支必须保持可编译。
+1. 主分支必须保持可编译。本仓库当前使用 `master`,如果后续切换为 `main`,以下流程中的主分支名称同步替换。
 2. 所有问题和需求先开 Issue,不要只口头描述。
 3. 所有代码改动通过 PR 合并,不要直接推主分支。
 4. `Common/`、`Boards/*/BSP/`、`CMakeLists.txt`、`CMakePresets.json` 属于框架核心,必须经过框架维护者 Review。
@@ -85,7 +85,7 @@ Issue 是任务单,用于记录 bug、需求、重构、文档和硬件测试项
 不要直接在主分支上改代码。每个任务从主分支拉一个新分支:
 
 ```bash
-git checkout main
+git checkout master
 git pull
 git checkout -b fix/h723-can-offline
 ```
