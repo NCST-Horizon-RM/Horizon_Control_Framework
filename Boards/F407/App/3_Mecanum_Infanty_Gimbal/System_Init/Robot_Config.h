@@ -6,6 +6,7 @@
 #define F4_FRAMEWORK_ROBOT_CONFIG_H
 
 #include "BSP_TIM.h"
+#include "DBUS.h"
 #include "DJI_Motor.h"
 #include "DM_Motor.h"
 #include "LK_Motor.h"
@@ -32,7 +33,7 @@ typedef struct __attribute__((aligned(4))){
 extern Chassis_Motor_Group_t chassis_motors;
 extern Gimbal_Motor_Group_t  gimbal_motors;
 extern Shoot_Motor_Group_t   shoot_motors;
-
+extern DBUS_Typedef   DBUS;
 extern VT13_Typedef VT13;
 extern C2G_t        C2G;
 

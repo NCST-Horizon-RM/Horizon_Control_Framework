@@ -58,13 +58,7 @@ void Robot_Cmd_Update(void)
     {
         Cmd_Handle_Safe_Mode();
     }
-    if (DBUS.Ctrl_Mode == 1) {
-        Cmd_Update_Mouse_Key();
-    }
-    else {
-        Cmd_Update_Remote_Ctrl();
-    }
-
+    Cmd_Update_Remote_Ctrl();
 
     // 双板通信
     Cmd_DualBoard_Sync();
@@ -101,7 +95,7 @@ static void Cmd_Update_Remote_Ctrl(void)
     chassis_cmd.mode = CHASSIS_CMD_FOLLOW;
     if (g2c.vr != 0) {
         chassis_cmd.mode = CHASSIS_CMD_SPIN;
-        chassis_cmd.target_vw = (float)g2c.vr /100.0f;
+        chassis_cmd.target_vw = (float)g2c.vr * 0.01f;
     }
     chassis_cmd.is_cap_on = true;
 }

@@ -179,10 +179,10 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
             cap_board_limit = 45.0f;//
             final_limit = 75.0f;
         }
-        Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 1);
+        /*Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 1);
         for(int i = 0; i < 4; i++) {
             chassis_ctrl.Drive_S[i].Output = m_states[i].limited_cmd;
-        }
+        }*/
         // 下发电容通讯数据
         CapSetData_t cap_cmd = {0};
         cap_cmd.Control.power_key     = trigger_discharge;
