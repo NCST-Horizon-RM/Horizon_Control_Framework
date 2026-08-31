@@ -26,14 +26,14 @@ uint8_t Gimbal_Control_Init(void)
     float PID_Pitch_P[3] = {/*0.45*/0.3f,   0.0f,  0.0f};
         PID_Init(&gimbal_ctrl.Pitch_P, 50.0f, 30.0f, PID_Pitch_P,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_Pitch_S[3] = {/*5.5*/-6.0f,   /*0.02*/0.0f,   0.0f};
+    float PID_Pitch_S[3] = {/*5.5*/4.0f,   /*0.02*/0.0f,   0.0f};
     PID_Init(&gimbal_ctrl.Pitch_S, 30.0f, 5.0f, PID_Pitch_S,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     //Yaw PID参数初始化
     float PID_Yaw_P[3] = {/*-0.28*/0.15f,   0.0f,  0.0f};
     PID_Init(&gimbal_ctrl.Yaw_P, 20.0f, 5.0f, PID_Yaw_P,
         0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_Yaw_S[3] = {/*-8.0*/-7.0f,   /*0.03*/0.0f,   0.0f};
+    float PID_Yaw_S[3] = {/*-8.0*/-5.0f,   /*0.03*/0.0f,   0.0f};
     PID_Init(&gimbal_ctrl.Yaw_S, 30.0f, 4.0f, PID_Yaw_S,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     //向系统下发底盘当前状态，准备中

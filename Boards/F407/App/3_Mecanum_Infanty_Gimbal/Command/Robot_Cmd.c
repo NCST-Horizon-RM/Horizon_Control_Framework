@@ -174,6 +174,16 @@ static void Cmd_DualBoard_Sync(void)
     g2c.S1            = VT13.Remote.fn_1;
     g2c.S2            = VT13.Remote.fn_2;*/
 
+    g2c.key_q         = DBUS.KeyBoard.Q;
+    g2c.key_e         = DBUS.KeyBoard.E;
+    g2c.key_v         = DBUS.KeyBoard.V;
+    g2c.key_shift     = DBUS.KeyBoard.Shift;
+    g2c.key_ctrl      = DBUS.KeyBoard.Ctrl;
+
+    g2c.romoteOnLine  = DBUS.offline.is_online;
+    g2c.S1            = DBUS.Remote.S1;
+    g2c.S2            = DBUS.Remote.S2;
+
     g2c.fire_wheel    = Is_Group_Online(SHOOT);
     g2c.gimbal_lixian = Is_Group_Online(GIMBAL);
 
