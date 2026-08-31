@@ -19,9 +19,14 @@ Shoot_Motor_Group_t shoot_motors;
 
 VT13_Typedef VT13 = {0};
 static uint8_t VT13_RX_DATA[21];
+DBUS_Typedef DBUS = {0};
+static uint8_t DBUS_RX_DATA[18];
 C2G_t C2G = {0};
 
 /* ================= 链接器段自动注册 ================= */
+
+UART_RX_NODE(&huart3, 100000, 18, DBUS_RX_DATA, NULL, 18, &DBUS, DBUS_Resolved);
+OFFLINE_NODE(&DBUS.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 
 UART_RX_NODE(&huart6, 921600, 21, VT13_RX_DATA, NULL, 21, &VT13, VT13_Resolved);
 OFFLINE_NODE(&VT13.offline, DBUS_OFFLINE_TIME, GROUP_NONE);

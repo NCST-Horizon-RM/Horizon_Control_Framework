@@ -61,9 +61,6 @@ void IMU_Task(void *argument) {
 }
 
 // 运动控制任务 1000Hz
-static IMU_Data_t imu ={0};
-static Chassis_Motor_Group_t chassis_m = {0};
-static Gimbal_Motor_Group_t gimbal_m = {0};
 static uint32_t motor_DWT_Count = 0;
 static float motor_period_s = 0.0f;
 void Motor_Task(void *argument)
@@ -79,14 +76,8 @@ void Motor_Task(void *argument)
         vTaskDelayUntil(&xLastWakeTime, xTimeIncrement);
 
         motor_period_s = DWT_GetDeltaT(&motor_DWT_Count);
-        imu = IMU_Data;
-        chassis_m = chassis_motors;
-        gimbal_m = gimbal_motors;
 
-        Chassis_Control_Task(&chassis_m,&imu,motor_period_s);
-        VOFA_JustFloat(NULL, 13, imu.pitch, imu.roll, imu.yaw, imu.temp,
-            imu.accel[0], imu.accel[1], imu.accel[2],
-            imu.gyro[0], imu.gyro[1], imu.gyro[2], imu_period_s);
+        Chassis_Control_Task(&chassis_motors,&IMU_Data,motor_period_s);
     }
 }
 

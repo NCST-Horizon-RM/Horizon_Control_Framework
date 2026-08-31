@@ -3,12 +3,9 @@
 //
 #include "Robot_Cmd.h"
 #include "System_State.h"
-#include "DBUS.h"
 #include "All_define.h"
 #include "BSP_CAN.h"
-#include "Referee.h"
 #include "Robot_Config.h"
-#include "VT13.h"
 #include "IMU_Task.h"
 #include "DualBoard_Frame.h"
 
@@ -28,10 +25,7 @@
 #define MOUSE_YAW_COEF         0.04f
 #define KB_YAW_COEF            2.0f
 
-
 #define YAW_ZERO               5100
-
-// --- 本地静态内存缓存 ---
 
 Chassis_Cmd_t chassis_cmd = {0};
 Gimbal_Cmd_t gimbal_cmd = {0};
@@ -47,19 +41,19 @@ static void Cmd_DualBoard_Sync(void);
 
 void Robot_Cmd_Init(void)
 {
-    // topic 槽位表在 Robot_Config.c 静态装配，无需运行时注册
+
 }
 
 void Robot_Cmd_Update(void)
 {
 
-    System_State_Report_Remote(VT13.offline.is_online);//向系统状态模块传入遥控器在线状态
+    System_State_Report_Remote(DBUS.offline.is_online);//向系统状态模块传入遥控器在线状态
 
     if (sys_state.error.bit.remote_lost)
     {
         Cmd_Handle_Safe_Mode();
     }
-    else if (VT13.Ctrl_Mode == 1) {
+    else if (DBUS.Ctrl_Mode == 1) {
         Cmd_Update_Mouse_Key();
     }
     else {
@@ -95,16 +89,16 @@ static void Cmd_Handle_Safe_Mode(void)
 static void Cmd_Update_Remote_Ctrl(void)
 {
     // 底盘
-    chassis_cmd.target_vx = (float)VT13.Remote.Channel [1] * RC_ROCKER_XY_COEF;
-    chassis_cmd.target_vy = -(float)VT13.Remote.Channel[0] * RC_ROCKER_XY_COEF;
-    chassis_cmd.target_vw =-(float)VT13.Remote.wheel * RC_ROCKER_VW_COEF;
+    chassis_cmd.target_vx = (float)DBUS.Remote.CH0 * RC_ROCKER_XY_COEF;
+    chassis_cmd.target_vy = -(float)DBUS.Remote.CH1 * RC_ROCKER_XY_COEF;
+    chassis_cmd.target_vw =-(float)DBUS.Remote.Dial * RC_ROCKER_VW_COEF;
     //云台
     gimbal_cmd.mode = GIMBAL_CMD_MANUAL;
-    gimbal_cmd.target_yaw_rate = -(float)VT13.Remote.Channel [3]*RC_YAW_COEF;
+    gimbal_cmd.target_yaw_rate = -(float)DBUS.Remote.CH3*RC_YAW_COEF;
     gimbal_cmd.target_yaw += gimbal_cmd.target_yaw_rate;
     gimbal_cmd.target_yaw = normalize_to_pi(gimbal_cmd.target_yaw * DEG2RAD) * RAD2DEG;
 
-    gimbal_cmd.target_pitch_rate = (float)VT13.Remote.Channel [2]*RC_PITCH_COEF;
+    gimbal_cmd.target_pitch_rate = (float)DBUS.Remote.CH2*RC_PITCH_COEF;
     gimbal_cmd.target_pitch += gimbal_cmd.target_pitch_rate;
     gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -13.0f, 31.0f);
     if (VT13.Remote.mode_sw == 2) {
@@ -120,7 +114,7 @@ static void Cmd_Update_Remote_Ctrl(void)
 
     //发射
     shoot_cmd.mode = SHOOT_CMD_READY;
-    shoot_cmd.heat_max = C2G.heat_large;
+    /*shoot_cmd.heat_max = C2G.heat_large;
     shoot_cmd.heat_now = C2G.heat_last;
     shoot_cmd.cool = C2G.cooling;
     shoot_cmd.trigger_single = (VT13.Remote.fn_1==1 && shoot_cmd.last_fn1==0);
@@ -132,7 +126,7 @@ static void Cmd_Update_Remote_Ctrl(void)
             shoot_cmd.mode = SHOOT_CMD_FIRE;
         }
     }
-    shoot_cmd.last_fn1 = VT13.Remote.fn_1;
+    shoot_cmd.last_fn1 = VT13.Remote.fn_1;*/
 }
 
 /**
@@ -140,11 +134,11 @@ static void Cmd_Update_Remote_Ctrl(void)
  */
 static void Cmd_Update_Mouse_Key(void)
 {
-    chassis_cmd.target_vx = (float)(VT13.KeyBoard.W - VT13.KeyBoard.S)* KB_WASD_COEF;
+    /*chassis_cmd.target_vx = (float)(VT13.KeyBoard.W - VT13.KeyBoard.S)* KB_WASD_COEF;
     chassis_cmd.target_vy = (float)(VT13.KeyBoard.D - VT13.KeyBoard.A)* KB_WASD_COEF;
     chassis_cmd.target_vw = (float)(-VT13.KeyBoard.Shift *KB_VW_COEF);
     gimbal_cmd.target_yaw   -=(float)(VT13.KeyBoard.E- VT13.KeyBoard.Q ) * KB_YAW_COEF+(VT13.Mouse.X_Flt)*MOUSE_YAW_COEF;
-    gimbal_cmd.target_pitch -=(float)(VT13.Mouse.Y_Flt *MOUSE_PITCH_COEF) ;
+    gimbal_cmd.target_pitch -=(float)(VT13.Mouse.Y_Flt *MOUSE_PITCH_COEF) ;*/
 
 }
 
@@ -170,7 +164,7 @@ static void Cmd_DualBoard_Sync(void)
     g2c.vr    = (int16_t)int_vr;
     g2c.pitch = (int8_t)int_pitch;
 
-    g2c.key_q         = VT13.KeyBoard.Q;
+    /*g2c.key_q         = VT13.KeyBoard.Q;
     g2c.key_e         = VT13.KeyBoard.E;
     g2c.key_v         = VT13.KeyBoard.V;
     g2c.key_shift     = VT13.KeyBoard.Shift;
@@ -178,7 +172,17 @@ static void Cmd_DualBoard_Sync(void)
 
     g2c.romoteOnLine  = VT13.offline.is_online;
     g2c.S1            = VT13.Remote.fn_1;
-    g2c.S2            = VT13.Remote.fn_2;
+    g2c.S2            = VT13.Remote.fn_2;*/
+
+    g2c.key_q         = DBUS.KeyBoard.Q;
+    g2c.key_e         = DBUS.KeyBoard.E;
+    g2c.key_v         = DBUS.KeyBoard.V;
+    g2c.key_shift     = DBUS.KeyBoard.Shift;
+    g2c.key_ctrl      = DBUS.KeyBoard.Ctrl;
+
+    g2c.romoteOnLine  = DBUS.offline.is_online;
+    g2c.S1            = DBUS.Remote.S1;
+    g2c.S2            = DBUS.Remote.S2;
 
     g2c.fire_wheel    = Is_Group_Online(SHOOT);
     g2c.gimbal_lixian = Is_Group_Online(GIMBAL);

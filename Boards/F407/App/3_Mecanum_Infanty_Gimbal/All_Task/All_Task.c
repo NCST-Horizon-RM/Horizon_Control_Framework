@@ -56,9 +56,6 @@ void IMU_Task(void *argument) {
 }
 
 // 运动控制任务 1000Hz
-static IMU_Data_t imu ={0};
-static Gimbal_Motor_Group_t gimbal_m = {0};
-static Shoot_Motor_Group_t shoot_m = {0};
 static uint32_t motor_DWT_Count = 0;
 static float motor_period_s = 0.0f;
 void Motor_Task(void *argument)
@@ -75,12 +72,8 @@ void Motor_Task(void *argument)
         vTaskDelayUntil(&xLastWakeTime, xTimeIncrement);
         motor_period_s = DWT_GetDeltaT(&motor_DWT_Count);
 
-        imu = IMU_Data;
-        gimbal_m = gimbal_motors;
-        shoot_m = shoot_motors;
-
-        Gimbal_Control_Task(&gimbal_m,&imu);
-        Shoot_Control_Task(&shoot_m,motor_period_s);
+        Gimbal_Control_Task(&gimbal_motors,&IMU_Data);
+        Shoot_Control_Task(&shoot_motors,motor_period_s);
     }
 }
 
