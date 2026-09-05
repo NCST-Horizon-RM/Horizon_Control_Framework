@@ -64,6 +64,7 @@ uint8_t Mecanum_Init(mecanumInit_typdef *mecanumInitT)
     mecanumInitT->deceleration_ratio = 3591.0f / 187.0f;
     return 0;
 }
+
 /**
  * @brief 底盘控制初始化
  * @param MOTOR 底盘电机总结构体指针
@@ -71,15 +72,18 @@ uint8_t Mecanum_Init(mecanumInit_typdef *mecanumInitT)
  */
 uint8_t Chassis_Control_Init(void)
 {
-    //麦克纳姆论底盘初始化
-    Mecanum_Init(&chassis_ctrl.Mecanum);
-    // 3508 速度环PID参数初始化
-    float PID_3508_Spd[3] = {5.0f,   0.1f,  0.0f};
-    for (int i = 0; i < 4; i++)
-    {
-        PID_Init(&chassis_ctrl.Drive_S[i], 16384.0f, 3000.0f, PID_3508_Spd,
+    //底盘初始化
+    Chassis_Init(&chassis_ctrl.chassis_cfg,chassis_ctrl.chassis_cfg.type);
+
+    float PID_vx[3] = {9.0f,   0.0f,  0.0f};
+    PID_Init(&chassis_ctrl.vx, 15.0f, 0.0f, PID_vx,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    }
+    float PID_vy[3] = {9.0f,   0.0f,  0.0f};
+    PID_Init(&chassis_ctrl.vy, 15.0f, 0.0f, PID_vy,
+            0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
+    float PID_vw[3] = {9.0f,   0.0f,  0.0f};
+    PID_Init(&chassis_ctrl.vw, 18.0f, 0.0f, PID_vw,
+            0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     // 底盘跟随PID初始化
     float PID_Follow_Pos[3] = {18.0f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Pos, 15.0f, 0.0f, PID_Follow_Pos,
@@ -153,17 +157,24 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
         float sin_theta = arm_sin_f32(chassis_cmd.offset_angle);
         float cur_vx_chassis = cur_vx_gimbal * cos_theta + cur_vy_gimbal * sin_theta;
         float cur_vy_chassis = cur_vy_gimbal * cos_theta - cur_vx_gimbal * sin_theta;
-        // 逆运动学与速度环 PID 计算
-        float target_rpm[4] = {0};
-        Mecanum_Calc(target_rpm, cur_vx_chassis, cur_vy_chassis, cur_vw, &chassis_ctrl.Mecanum);
+
         for (int i = 0; i < 4; i++)
         {
-            PID_Calculate(&chassis_ctrl.Drive_S[i], c_motor->DJI_3508_Chassis[i].Speed_now, target_rpm[i]);
+            chassis_ctrl.chassis_feedback.wheel_rpm[i] = c_motor->DJI_3508_Chassis[i].Speed_now;
         }
+        Chassis_Forward(&chassis_ctrl.chassis_cfg,&chassis_ctrl.chassis_feedback);
+
+        PID_Calculate(&chassis_ctrl.vx, chassis_ctrl.chassis_feedback.vx, cur_vx_chassis);
+        PID_Calculate(&chassis_ctrl.vy, chassis_ctrl.chassis_feedback.vy, cur_vy_chassis);
+        PID_Calculate(&chassis_ctrl.vw, chassis_ctrl.chassis_feedback.vw, cur_vw);
+
+        // 逆运动学与速度环 PID 计算
+        Chassis_Force(&chassis_ctrl.chassis_cfg,chassis_ctrl.vx.Output,chassis_ctrl.vy.Output,chassis_ctrl.vw.Output
+            ,&chassis_ctrl.chassis_feedback,&chassis_ctrl.chassis_command);
         // 功率控制
         for(int i = 0; i < 4; i++) {
             m_states[i].speed_rpm = c_motor->DJI_3508_Chassis[i].Speed_now;
-            m_states[i].original_cmd = chassis_ctrl.Drive_S[i].Output;
+            m_states[i].original_cmd = chassis_ctrl.chassis_command.wheel_torque_raw[i];
         }
         bool trigger_discharge = chassis_cmd.is_cap_on;// 输入电容开启标志
         float cap_board_limit = 0.0f;
@@ -179,10 +190,10 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
             cap_board_limit = 45.0f;//
             final_limit = 75.0f;
         }
-        /*Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 1);
+        Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 1);
         for(int i = 0; i < 4; i++) {
-            chassis_ctrl.Drive_S[i].Output = m_states[i].limited_cmd;
-        }*/
+            chassis_ctrl.chassis_command.wheel_torque_raw[i] = m_states[i].limited_cmd;
+        }
         // 下发电容通讯数据
         CapSetData_t cap_cmd = {0};
         cap_cmd.Control.power_key     = trigger_discharge;
@@ -195,10 +206,10 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
     if (!is_system_locked)
     {
         DJI_Motor_Send(&hcan2, 0x200,
-                       (int16_t)chassis_ctrl.Drive_S[0].Output,
-                       (int16_t)chassis_ctrl.Drive_S[1].Output,
-                       (int16_t)chassis_ctrl.Drive_S[2].Output,
-                       (int16_t)chassis_ctrl.Drive_S[3].Output);
+                       (int16_t)chassis_ctrl.chassis_command.wheel_torque_raw[0],
+                       (int16_t)chassis_ctrl.chassis_command.wheel_torque_raw[1],
+                       (int16_t)chassis_ctrl.chassis_command.wheel_torque_raw[2],
+                       (int16_t)chassis_ctrl.chassis_command.wheel_torque_raw[3]);
     }
 }
 

@@ -11,8 +11,22 @@ typedef struct
     float wheel_r;            /* 轮的半径 (m) */
     float half_wheelbase;     /* 质心到前后轴的距离 (m) 即：前后轴距的一半 (Lx) */
     float half_track_width;   /* 质心到左右轮的距离 (m) 即：左右轮距的一半 (Ly) */
+    float chassis_r;
     float deceleration_ratio; /* 电机减速比 */
+    float wheel_rad_s[4];
+    float wheel_force[4];
+    float chassis_dx;
+    float chassis_dy;
+    float chassis_dw;
+    float chassis_ddx;
+    float chassis_ddy;
+    float chassis_ddw;
+
+    float M;
+    float J;
 } mecanumInit_typdef;
+
+
 
 uint8_t Mecanum_Init(mecanumInit_typdef *mecanumInitT);
 void Mecanum_Calc(float *wheel_rpm, float vx_temp, float vy_temp, float vr, mecanumInit_typdef *mecanumInit_t);
