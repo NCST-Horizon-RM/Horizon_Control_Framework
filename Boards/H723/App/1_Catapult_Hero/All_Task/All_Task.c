@@ -85,6 +85,7 @@ void Motor_Task(void *argument)
         gimbal_m = gimbal_motors;
         shoot_m = shoot_motors;
 
+        Chassis_Control_Task(&chassis_motors,motor_period_s);
         //Shoot_Control_Task(&shoot_motors, &gimbal_motors,motor_period_s);
     }
 }

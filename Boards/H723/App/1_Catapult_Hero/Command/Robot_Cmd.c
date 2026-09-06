@@ -94,8 +94,8 @@ static void Cmd_Handle_Safe_Mode(void)
 static void Cmd_Update_Remote_Ctrl(void)
 {
     chassis_cmd.target_vx = (float)DBUS.Remote.CH1 * RC_ROCKER_XY_COEF + (float)VT13.Remote.Channel[1] * RC_ROCKER_XY_COEF;
-    chassis_cmd.target_vy = (float)DBUS.Remote.CH0 * RC_ROCKER_XY_COEF + (float)VT13.Remote.Channel[0] * RC_ROCKER_XY_COEF;
-    float active_vw       = (float)DBUS.Remote.CH2 * RC_ROCKER_VW_COEF + (float)VT13.Remote.Channel[3] * RC_ROCKER_VW_COEF;
+    chassis_cmd.target_vy = -(float)DBUS.Remote.CH0 * RC_ROCKER_XY_COEF + (float)VT13.Remote.Channel[0] * RC_ROCKER_XY_COEF;
+    float active_vw       = -(float)DBUS.Remote.CH2 * RC_ROCKER_VW_COEF + (float)VT13.Remote.Channel[3] * RC_ROCKER_VW_COEF;
     gimbal_cmd.target_yaw   += (float)DBUS.Remote.CH3 * RC_YAW_COEF + (float)VT13.Remote.Channel[2] * RC_YAW_COEF;
 
     if (VT13.Remote.mode_sw == 1 && VT13.Remote.fn_2 == 1) {

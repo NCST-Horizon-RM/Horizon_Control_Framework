@@ -22,19 +22,21 @@
 轮位置（右手系，Lx = 前后半轴距，Ly = 左右半轮距）：
   RF(+Lx,-Ly)    LF(+Lx,+Ly)    LB(-Lx,+Ly)    RB(-Lx,-Ly)
 
-电机方向约定：
+电机方向约定（麦轮 / 全向轮）：
   「电机正转」在左轮(LF/LB)对应底盘 +X 前进，在右轮(RF/RB)对应 -X 后退。
-  故同一 +X 前进下，左轮目标为正、右轮目标为负。本模块所有轮速/力矩输出
-  均已包含该镜像符号，可直接作为电机 rpm / 电流原始值下发，无需再乘符号。
+  故同一 +X 前进下，左轮目标为正、右轮目标为负。麦轮/全向轮的轮速/力矩输出
+  已包含该镜像符号，可直接作为电机 rpm / 电流原始值下发，无需再乘符号。
 
 输出单位：
-  wheel_rpm_target   —— 电机转速 (rpm)，已含左右镜像符号
+  wheel_rpm_target   —— 电机转速 (rpm)，麦轮/全向轮已含左右镜像符号
   steer_angle_target —— 舵向目标角 (rad)，舵电机坐标系（含 offset）
-  wheel_torque_raw   —— 电机电流原始值 (raw)，已含左右镜像符号与力矩→电流系数
+  wheel_torque_raw   —— 电机电流原始值 (raw)；麦轮/全向轮含左右镜像符号，
+                        舵轮为沿“当前实际轮向”的力矩，两者均已乘力矩→电流系数
 
 舵向角：
   fb.steer_angle 为舵电机绝对角 (rad)。模块内部减 steer_offset 换算到
-  底盘坐标系；cmd.steer_angle_target 返回舵电机坐标系角，供舵向环直接跟踪。
+  电机读数差坐标系 th = steer_angle - steer_offset；
+  cmd.steer_angle_target 返回舵电机坐标系角，供舵向环直接跟踪。
   steer_offset[i] = 舵电机角在「轮指向底盘 +X」时的读数。
 ====================================================================*/
 
@@ -65,6 +67,7 @@ typedef struct {
     float vy;
     float vw;
     float wheel_rpm[4];    // 驱动轮转速 (rpm)
+    float steer_rpm[4];    // 舵向轮转速 (rpm)
     float steer_angle[4];  // 舵向角 (rad，舵电机坐标系，仅舵轮)
 } Chassis_Feedback_t;
 
@@ -85,11 +88,14 @@ void Chassis_Forward(const Chassis_Cfg_t *cfg, Chassis_Feedback_t *fb);
 void Chassis_Inverse(const Chassis_Cfg_t *cfg, float vx, float vy, float vw,
                      const Chassis_Feedback_t *fb, Chassis_Command_t *cmd);
 
-/* 力控：目标加速度 (ax, ay, aw) → 各轮力矩电流 */
+/* 力控：目标加速度 (ax, ay, aw) → 舵轮舵向目标 + 各轮力矩电流
+ * （麦轮/全向轮只有力矩电流；舵轮独立使用时包含舵向位置目标解算） */
 void Chassis_Force(const Chassis_Cfg_t *cfg, float ax, float ay, float aw,
                    const Chassis_Feedback_t *fb, Chassis_Command_t *cmd);
 
-/* 力速混控：目标速度 + 加速度 → 轮速/舵角 + 力矩电流（= Inverse + Force） */
+/* 力速混控：目标速度 + 加速度 → 轮速/舵角 + 力矩电流。
+ * 舵向目标由速度逆解给出，力矩按当前实际舵向投影（= 旧版
+ * Swerve_Inverse_Calc 的“速度定舵向 + 加速度前馈”行为） */
 void Chassis_Mixed_Control(const Chassis_Cfg_t *cfg,
                            float vx, float vy, float vw,
                            float ax, float ay, float aw,
