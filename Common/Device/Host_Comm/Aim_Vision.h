@@ -37,11 +37,10 @@ typedef struct {
 typedef struct {
     float pitch;        // 当前云台 Pitch 角度
     float yaw;          // 当前云台 Yaw 角度
-    float pitch_omega;  // 当前云台 Pitch 角速度
-    float yaw_omega;    // 当前云台 Yaw 角速度
-
     uint8_t mode;       // 当前模式 (0自瞄, 1小符, 2大符)
     uint8_t bullet_speed; // 当前弹速
+    float pitch_omega;  // 当前云台 Pitch 角速度
+    float yaw_omega;    // 当前云台 Yaw 角速度
 } Vision_Send_t;
 
 // 函数声明

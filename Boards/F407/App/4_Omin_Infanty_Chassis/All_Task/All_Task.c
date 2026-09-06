@@ -2,21 +2,21 @@
 // Created by CaoKangqi on 2026/6/14.
 //
 #include "All_Task.h"
+
 #include "BSP_SPI.h"
 #include "Robot_Config.h"
-#include "Catapult_Ctrl.h"
+#include "Buzzer.h"
 #include "Chassis_Ctrl.h"
 #include "DBUS.h"
+#include "LED.h"
 #include "Power_CAP.h"
 #include "Referee.h"
 #include "Robot_Cmd.h"
 #include "System_State.h"
-#include "WS2812.h"
 #include "System_Indicator.h"
-#include "Vofa.h"
 #include "VT13.h"
-
-//指令中心任务 200Hz
+#include "Vofa.h"
+// 指令中心任务 200Hz
 static uint32_t CMD_DWT_Count = 0;
 static float cmd_period_s = 0.0f;
 void Command_Task(void *argument)
@@ -59,11 +59,8 @@ void IMU_Task(void *argument) {
         IMU_Update_Task(&IMU_Data, imu_period_s);
     }
 }
-//运动控制任务 1000Hz
-static IMU_Data_t imu ={0};
-static Chassis_Motor_Group_t chassis_m = {0};
-static Gimbal_Motor_Group_t gimbal_m = {0};
-static Shoot_Motor_Group_t shoot_m = {0};
+
+// 运动控制任务 1000Hz
 static uint32_t motor_DWT_Count = 0;
 static float motor_period_s = 0.0f;
 void Motor_Task(void *argument)
@@ -74,19 +71,13 @@ void Motor_Task(void *argument)
 
     motor_DWT_Count = DWT->CYCCNT;
     Chassis_Control_Init();
-    //Shoot_Control_Init();
     for(;;)
     {
         vTaskDelayUntil(&xLastWakeTime, xTimeIncrement);
 
         motor_period_s = DWT_GetDeltaT(&motor_DWT_Count);
-        imu = IMU_Data;
-        chassis_m = chassis_motors;
-        gimbal_m = gimbal_motors;
-        shoot_m = shoot_motors;
 
-        Chassis_Control_Task(&chassis_motors,motor_period_s);
-        //Shoot_Control_Task(&shoot_motors, &gimbal_motors,motor_period_s);
+        Chassis_Control_Task(&chassis_motors,&IMU_Data,motor_period_s);
     }
 }
 
@@ -127,13 +118,13 @@ void StartTask02(void *argument)
 
 //定时器中断
 void MY_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-    //定时器4 1000Hz
-    if (htim->Instance == TIM4) {
-        WS2812_Ticks();
-        DWT_SysTimeUpdate();
+    //定时器3 1000Hz
+    if (htim->Instance == TIM3) {
+        DWT_SysTimeUpdate();//系统时间
         Offline_Monitor();
         System_State_Update(&Referee);
-        System_Indicator_Ticks();
+        LED_Ticks();
+        System_Indicator_Ticks();//蜂鸣器
     }
     //定时器6 500Hz
     if (htim->Instance == TIM6) {

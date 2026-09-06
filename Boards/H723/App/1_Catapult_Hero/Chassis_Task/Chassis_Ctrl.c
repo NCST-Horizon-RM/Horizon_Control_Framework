@@ -13,14 +13,11 @@
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
 
-Swerve_State_t S_Now;
-
 //功率控制
 static Power_Ctrl_t chassis_model;
-static Motor_Power_State_t m_states[8];//底盘共8个电机
+static Motor_Power_State_t m_states[4];//底盘共8个电机
 static Power_Node_t drive_nodes[4]; // 用于驱动电机
-static Power_Node_t steer_nodes[4]; // 用于舵向电机
-static Power_Group_t pwr_groups[2];//两个电机组
+static Power_Group_t pwr_groups[1];//两个电机组
 
 static float Chassis_Power_Arbitrator(float base_power_limit,
                                       float cur_buffer,
@@ -33,20 +30,57 @@ static float Chassis_Power_Arbitrator(float base_power_limit,
  * @param MOTOR 底盘电机总结构体指针
  * @return uint8_t 初始化状态
  */
+uint8_t Chassis_Init(Chassis_Cfg_t *cfg, Chassis_Type_e type)
+{
+    if (cfg == NULL) return 1;
+
+    cfg->type = type;
+    cfg->mass = 17.5f;
+    cfg->inertia = 1.0f;
+    cfg->torque_to_raw = ((1.0f / (15.7647f * 0.0157f * 0.85f)) * (16384.0f / 20.0f));
+    cfg->steer_offset[0] = -120.0f * DEG2RAD;
+    cfg->steer_offset[1] = -120.0f * DEG2RAD;
+    cfg->steer_offset[2] =  60.0f * DEG2RAD;
+    cfg->steer_offset[3] =  60.0f * DEG2RAD;
+
+    switch (type) {
+        case MECANUM:
+            cfg->wheel_r = 0.075f;
+            cfg->Lx = 0.20f;
+            cfg->Ly = 0.20f;
+            cfg->gear_ratio = 3591.0f / 187.0f;
+            break;
+        case OMNI:
+            cfg->wheel_r = 0.075f;
+            cfg->Lx = 0.25f;
+            cfg->Ly = 0.25f;
+            cfg->gear_ratio = 3591.0f / 187.0f;
+            break;
+        case SWERVE:
+            cfg->wheel_r = 0.06f;
+            cfg->Lx = 0.2f;
+            cfg->Ly = 0.22f;
+            cfg->gear_ratio = 15.76f;
+            break;
+        default:
+            return 1;
+    }
+    return 0;
+}
+
 uint8_t Chassis_Control_Init(void)
 {
-    Swerve_Init(&S_Now);
+    Chassis_Init(&chassis_ctrl.Chassis_Config,SWERVE);
 
     float PID_V_Param[3] = {8.0f, 0.0f, 0.0f};
     PID_Init(&chassis_ctrl.PID_Vx, 8.0f, 5.0f, PID_V_Param,0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     PID_Init(&chassis_ctrl.PID_Vy, 8.0f, 5.0f, PID_V_Param,0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
 
-    float PID_Vw_Param[3] = {2.0f, 0.0f, 0.0f};
+    float PID_Vw_Param[3] = {8.0f, 0.0f, 0.0f};
     PID_Init(&chassis_ctrl.PID_Vw, 8.0f, 8.0f, PID_Vw_Param,0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
 
     float PID_6020_Pos[3] = {500.0f, 0.0f, 0.0f};
     float PID_6020_Spd[3] = {85.0f,  0.0f, 0.0f};
-    float PID_3508_Spd[3] = {5.0f,   0.1f,  0.0f};
 
     for (int i = 0; i < 4; i++)
     {
@@ -56,27 +90,18 @@ uint8_t Chassis_Control_Init(void)
         // 6020 舵向速度环：输入 RPM 误差 -> 输出电流
         PID_Init(&chassis_ctrl.Steer_S[i], 16384.0f, 4000.0f, PID_6020_Spd,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-        // 3508 驱动速度环：输入 RPM 误差 -> 输出电流
-        PID_Init(&chassis_ctrl.Drive_S[i], 16384.0f, 3000.0f, PID_3508_Spd,
-            0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    }
+        }
     Power_Ctrl_Init(&chassis_model);
     for(int i=0; i<4; i++) {
         // 配置驱动轮节点 (绑定 3508 模型)
         drive_nodes[i].state = &m_states[i];
         drive_nodes[i].model = &MODEL_M3508;
-
-        // 配置转向轮节点 (绑定 6020 模型)
-        steer_nodes[i].state = &m_states[i+4];
-        steer_nodes[i].model = &MODEL_M6020;
     }
     // 配置优先级：
     // groups[0]: 低优先级，驱动轮，超功率时优先降驱动轮功率
     pwr_groups[0].nodes = drive_nodes;
     pwr_groups[0].node_count = 4;
-    // groups[1]: 高优先级，舵轮转向
-    pwr_groups[1].nodes = steer_nodes;
-    pwr_groups[1].node_count = 4;
+
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
     return 1;
@@ -108,7 +133,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt)
         for (int i = 0; i < 4; i++) {
             PID_Clear(&chassis_ctrl.Steer_P[i]);
             PID_Clear(&chassis_ctrl.Steer_S[i]);
-            PID_Clear(&chassis_ctrl.Drive_S[i]);
         }
         DJI_Motor_Send(&hfdcan1, 0x200,0,0,0,0);
         DJI_Motor_Send(&hfdcan2, 0x1FE,0,0,0,0);
@@ -116,90 +140,85 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt)
     else
     {
         for (int i = 0; i < 4; i++) {
-            chassis_ctrl.swerve_fb.steer_angle_rad[i] = (float)c_motor->DJI_6020_Steer[i].Angle_Infinite * ENCODER_TO_RAD;
-            chassis_ctrl.swerve_fb.steer_rpm[i]       = (float)c_motor->DJI_6020_Steer[i].Speed_now;
-            chassis_ctrl.swerve_fb.wheel_rpm[i]       = (float)c_motor->DJI_3508_Chassis[i].Speed_now;
+            chassis_ctrl.Chassis_Feedback.steer_angle[i] = (float)c_motor->DJI_6020_Steer[i].Angle_Infinite * ENCODER_TO_RAD;
+            chassis_ctrl.Chassis_Feedback.steer_rpm[i]       = (float)c_motor->DJI_6020_Steer[i].Speed_now;
+            chassis_ctrl.Chassis_Feedback.wheel_rpm[i]       = (float)c_motor->DJI_3508_Chassis[i].Speed_now;
         }
 
-        Swerve_Forward_Calc(&S_Now, &chassis_ctrl.swerve_fb);
+        Chassis_Forward(&chassis_ctrl.Chassis_Config,&chassis_ctrl.Chassis_Feedback);
 
         float vx_tar = chassis_cmd.target_vx;
         float vy_tar = chassis_cmd.target_vy;
         float vw_tar = chassis_cmd.target_vw;
 
-        PID_Calculate(&chassis_ctrl.PID_Vx, S_Now.vx, vx_tar);
-        PID_Calculate(&chassis_ctrl.PID_Vy, S_Now.vy, vy_tar);
-        PID_Calculate(&chassis_ctrl.PID_Vw, S_Now.vw, vw_tar);
+        PID_Calculate(&chassis_ctrl.PID_Vx, chassis_ctrl.Chassis_Feedback.vx, vx_tar);
+        PID_Calculate(&chassis_ctrl.PID_Vy, chassis_ctrl.Chassis_Feedback.vy, vy_tar);
+        PID_Calculate(&chassis_ctrl.PID_Vw, chassis_ctrl.Chassis_Feedback.vw, vw_tar);
 
-        Swerve_Inverse_Calc(&chassis_ctrl.swerve_cmd, &S_Now,
-                            chassis_ctrl.PID_Vx.Output, chassis_ctrl.PID_Vy.Output, chassis_ctrl.PID_Vw.Output,
-                            vx_tar, vy_tar, vw_tar,
-                            &chassis_ctrl.swerve_fb);
+        /* 速度定舵向 + 加速度力矩前馈（力速混控） */
+        Chassis_Mixed_Control(&chassis_ctrl.Chassis_Config,
+                              vx_tar, vy_tar, vw_tar,
+                              chassis_ctrl.PID_Vx.Output,
+                              chassis_ctrl.PID_Vy.Output,
+                              chassis_ctrl.PID_Vw.Output,
+                              &chassis_ctrl.Chassis_Feedback,
+                              &chassis_ctrl.Chassis_Command);
 
         for (int i = 0; i < 4; i++)
         {
             PID_Calculate(&chassis_ctrl.Steer_P[i],
-                          chassis_ctrl.swerve_fb.steer_angle_rad[i],
-                          chassis_ctrl.swerve_cmd.target_steer_angle_rad[i]);
+                          chassis_ctrl.Chassis_Feedback.steer_angle[i],
+                          chassis_ctrl.Chassis_Command.steer_angle_target[i]);
 
             PID_Calculate(&chassis_ctrl.Steer_S[i],
-                          chassis_ctrl.swerve_fb.steer_rpm[i],
+                          chassis_ctrl.Chassis_Feedback.steer_rpm[i],
                           chassis_ctrl.Steer_P[i].Output);
-
-            PID_Calculate(&chassis_ctrl.Drive_S[i],
-                          chassis_ctrl.swerve_fb.wheel_rpm[i],
-                          chassis_ctrl.swerve_cmd.target_wheel_rpm[i]);
-
-            chassis_ctrl.Drive_S[i].Output += chassis_ctrl.swerve_cmd.ff_torque_raw[i];
-
-            chassis_ctrl.Steer_S[i].Output = MATH_Limit_float(chassis_ctrl.Steer_S[i].Output, -16384, 16384);
-            chassis_ctrl.Drive_S[i].Output = MATH_Limit_float(chassis_ctrl.Drive_S[i].Output, -16384, 16384);
         }
 
-        for(int i=0; i<4; i++) {
-            m_states[i].speed_rpm = chassis_ctrl.swerve_fb.wheel_rpm[i];
-            m_states[i].original_cmd = chassis_ctrl.Drive_S[i].Output;
-
-            m_states[i+4].speed_rpm = chassis_ctrl.swerve_fb.steer_rpm[i];
-            m_states[i+4].original_cmd = chassis_ctrl.Steer_S[i].Output;
-        }
-
-        bool trigger_discharge = true;
-        float cap_board_limit = 0.0f;
-        float final_limit = 0.0f;
-        if (Referee.offline.is_online) {
-            final_limit = Chassis_Power_Arbitrator(
-                                    Referee.robot_status.chassis_power_limit,
-                                    Referee.power_heat_data.buffer_energy,
-                                    1, &cap, &trigger_discharge, &cap_board_limit);
-        }
-        else {
-            trigger_discharge = FALSE;
-            cap_board_limit = 75.0f;//
-            final_limit = 75.0f;
-        }
-        Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 2);
-
-        for(int i=0; i<4; i++) {
-            chassis_ctrl.Drive_S[i].Output = m_states[i].limited_cmd;
-            chassis_ctrl.Steer_S[i].Output = m_states[i+4].limited_cmd;
-        }
-
-        CapSetData_t cap_cmd = {0};
-        cap_cmd.Control.power_key     = 1;
-        cap_cmd.Control.capPowerLimit = (uint8_t)cap_board_limit;
-        cap_cmd.Control.buffer_now    = (uint8_t)Referee.power_heat_data.buffer_energy;
-        cap_cmd.Control.robot_state   = (Referee.robot_status.current_HP > 0) ? 1 : 0;
-        Power_Cap_Tx(&hfdcan2, 0x252, &cap_cmd);
+    //     for(int i=0; i<4; i++) {
+    //         m_states[i].speed_rpm = chassis_ctrl.swerve_fb.wheel_rpm[i];
+    //         m_states[i].original_cmd = chassis_ctrl.Drive_S[i].Output;
+    //
+    //         m_states[i+4].speed_rpm = chassis_ctrl.swerve_fb.steer_rpm[i];
+    //         m_states[i+4].original_cmd = chassis_ctrl.Steer_S[i].Output;
+    //     }
+    //
+    //     bool trigger_discharge = true;
+    //     float cap_board_limit = 0.0f;
+    //     float final_limit = 0.0f;
+    //     if (Referee.offline.is_online) {
+    //         final_limit = Chassis_Power_Arbitrator(
+    //                                 Referee.robot_status.chassis_power_limit,
+    //                                 Referee.power_heat_data.buffer_energy,
+    //                                 1, &cap, &trigger_discharge, &cap_board_limit);
+    //     }
+    //     else {
+    //         trigger_discharge = FALSE;
+    //         cap_board_limit = 75.0f;//
+    //         final_limit = 75.0f;
+    //     }
+    //     Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 2);
+    //
+    //     for(int i=0; i<4; i++) {
+    //         chassis_ctrl.Drive_S[i].Output = m_states[i].limited_cmd;
+    //         chassis_ctrl.Steer_S[i].Output = m_states[i+4].limited_cmd;
+    //     }
+    //
+    //     CapSetData_t cap_cmd = {0};
+    //     cap_cmd.Control.power_key     = 1;
+    //     cap_cmd.Control.capPowerLimit = (uint8_t)cap_board_limit;
+    //     cap_cmd.Control.buffer_now    = (uint8_t)Referee.power_heat_data.buffer_energy;
+    //     cap_cmd.Control.robot_state   = (Referee.robot_status.current_HP > 0) ? 1 : 0;
+    //     Power_Cap_Tx(&hfdcan2, 0x252, &cap_cmd);
     }
     //电流发送
     if (!is_system_locked)
     {
         DJI_Motor_Send(&hfdcan1, 0x200,
-                       (int16_t)chassis_ctrl.Drive_S[0].Output,
-                       (int16_t)chassis_ctrl.Drive_S[1].Output,
-                       (int16_t)chassis_ctrl.Drive_S[2].Output,
-                       (int16_t)chassis_ctrl.Drive_S[3].Output);
+                       (int16_t)chassis_ctrl.Chassis_Command.wheel_torque_raw[0],
+                       (int16_t)chassis_ctrl.Chassis_Command.wheel_torque_raw[1],
+                       (int16_t)chassis_ctrl.Chassis_Command.wheel_torque_raw[2],
+                       (int16_t)chassis_ctrl.Chassis_Command.wheel_torque_raw[3]);
 
         DJI_Motor_Send(&hfdcan2, 0x1FE,
                        (int16_t)chassis_ctrl.Steer_S[0].Output,

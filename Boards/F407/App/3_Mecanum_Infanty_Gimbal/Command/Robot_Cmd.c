@@ -2,6 +2,8 @@
 // Created by CaoKangqi on 2026/6/23.
 //
 #include "Robot_Cmd.h"
+
+#include "Aim_Vision.h"
 #include "System_State.h"
 #include "All_define.h"
 #include "BSP_CAN.h"
@@ -32,6 +34,8 @@ Gimbal_Cmd_t gimbal_cmd = {0};
 Shoot_Cmd_t shoot_cmd = {0};
 //双板通讯
 G2C_t g2c;
+//自瞄
+Vision_Send_t vision_Send;
 // --- 私有函数声明 ---
 static void Cmd_Handle_Safe_Mode(void);
 static void Cmd_Update_Remote_Ctrl(void);
@@ -89,27 +93,30 @@ static void Cmd_Handle_Safe_Mode(void)
 static void Cmd_Update_Remote_Ctrl(void)
 {
     // 底盘
-    chassis_cmd.target_vx = (float)DBUS.Remote.CH0 * RC_ROCKER_XY_COEF;
-    chassis_cmd.target_vy = -(float)DBUS.Remote.CH1 * RC_ROCKER_XY_COEF;
+    chassis_cmd.target_vx = (float)DBUS.Remote.CH1 * RC_ROCKER_XY_COEF;
+    chassis_cmd.target_vy = -(float)DBUS.Remote.CH0 * RC_ROCKER_XY_COEF;
     chassis_cmd.target_vw =-(float)DBUS.Remote.Dial * RC_ROCKER_VW_COEF;
     //云台
-    gimbal_cmd.mode = GIMBAL_CMD_MANUAL;
-    gimbal_cmd.target_yaw_rate = -(float)DBUS.Remote.CH3*RC_YAW_COEF;
-    gimbal_cmd.target_yaw += gimbal_cmd.target_yaw_rate;
-    gimbal_cmd.target_yaw = normalize_to_pi(gimbal_cmd.target_yaw * DEG2RAD) * RAD2DEG;
-
-    gimbal_cmd.target_pitch_rate = (float)DBUS.Remote.CH2*RC_PITCH_COEF;
-    gimbal_cmd.target_pitch += gimbal_cmd.target_pitch_rate;
-    gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -13.0f, 31.0f);
-    if (VT13.Remote.mode_sw == 2) {
+    if (vision_Recv.target_found==1 && DBUS.Remote.S1!=1) {
         gimbal_cmd.mode = GIMBAL_CMD_AUTO_AIM;
-        gimbal_cmd.target_yaw_rate =0;
-        gimbal_cmd.target_yaw +=0;
+        gimbal_cmd.target_yaw_rate = vision_Recv.yaw_plan * DEG2RAD;
+        gimbal_cmd.target_yaw = -vision_Recv.yaw;
         gimbal_cmd.target_yaw = normalize_to_pi(gimbal_cmd.target_yaw * DEG2RAD) * RAD2DEG;
 
-        gimbal_cmd.target_pitch_rate = 0;
-        gimbal_cmd.target_pitch += 0;
+        gimbal_cmd.target_pitch_rate = vision_Recv.pitch_plan * DEG2RAD;
+        gimbal_cmd.target_pitch = -vision_Recv.pitch;
         gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -13.0f, 31.0f);
+    }
+    else{
+        gimbal_cmd.mode = GIMBAL_CMD_MANUAL;
+        gimbal_cmd.target_yaw_rate = -(float)DBUS.Remote.CH2*RC_YAW_COEF;
+        gimbal_cmd.target_yaw += gimbal_cmd.target_yaw_rate;
+        gimbal_cmd.target_yaw = normalize_to_pi(gimbal_cmd.target_yaw * DEG2RAD) * RAD2DEG;
+
+        gimbal_cmd.target_pitch_rate = (float)DBUS.Remote.CH3*RC_PITCH_COEF;
+        gimbal_cmd.target_pitch -= gimbal_cmd.target_pitch_rate;
+        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -13.0f, 31.0f);
+
     }
 
     //发射
@@ -134,18 +141,13 @@ static void Cmd_Update_Remote_Ctrl(void)
  */
 static void Cmd_Update_Mouse_Key(void)
 {
-    /*chassis_cmd.target_vx = (float)(VT13.KeyBoard.W - VT13.KeyBoard.S)* KB_WASD_COEF;
-    chassis_cmd.target_vy = (float)(VT13.KeyBoard.D - VT13.KeyBoard.A)* KB_WASD_COEF;
-    chassis_cmd.target_vw = (float)(-VT13.KeyBoard.Shift *KB_VW_COEF);
-    gimbal_cmd.target_yaw   -=(float)(VT13.KeyBoard.E- VT13.KeyBoard.Q ) * KB_YAW_COEF+(VT13.Mouse.X_Flt)*MOUSE_YAW_COEF;
-    gimbal_cmd.target_pitch -=(float)(VT13.Mouse.Y_Flt *MOUSE_PITCH_COEF) ;*/
 
 }
 
 /**
  * @brief 双板数据同步逻辑
  */
-
+uint8_t vision_buf[20];
 static void Cmd_DualBoard_Sync(void)
 {
     // 放大并四舍五入取整
@@ -164,16 +166,6 @@ static void Cmd_DualBoard_Sync(void)
     g2c.vr    = (int16_t)int_vr;
     g2c.pitch = (int8_t)int_pitch;
 
-    /*g2c.key_q         = VT13.KeyBoard.Q;
-    g2c.key_e         = VT13.KeyBoard.E;
-    g2c.key_v         = VT13.KeyBoard.V;
-    g2c.key_shift     = VT13.KeyBoard.Shift;
-    g2c.key_ctrl      = VT13.KeyBoard.Ctrl;
-
-    g2c.romoteOnLine  = VT13.offline.is_online;
-    g2c.S1            = VT13.Remote.fn_1;
-    g2c.S2            = VT13.Remote.fn_2;*/
-
     g2c.key_q         = DBUS.KeyBoard.Q;
     g2c.key_e         = DBUS.KeyBoard.E;
     g2c.key_v         = DBUS.KeyBoard.V;
@@ -190,6 +182,17 @@ static void Cmd_DualBoard_Sync(void)
     uint8_t buf[8];
     G2C_pack(&g2c, buf);
     CAN_Send_Msg(&hcan1, 0x231, buf, 8);
+
+
+    vision_Send.pitch = -IMU_Data.pitch;
+    vision_Send.yaw = -IMU_Data.yaw;
+    vision_Send.pitch_omega = -IMU_Data.gyro[1];
+    vision_Send.yaw_omega = -IMU_Data.gyro[2];
+    vision_Send.mode = 0;
+    vision_Send.bullet_speed = 0;
+
+    Vision_Encode(&vision_Send, vision_buf);
+    HAL_UART_Transmit_DMA(&huart1, vision_buf, 20);
 }
 
 /**
@@ -202,4 +205,9 @@ void DualBoard_CAN_Rx_Callback(void *instance, uint8_t *data)
 {
     if (instance == NULL || data == NULL) return;
     C2G_unpack(data, (C2G_t *)instance);
+}
+
+void Vision_UART_Rx_Callback(uint8_t* Data, void *device_ptr, uint16_t size) {
+    if (device_ptr == NULL) return;
+    Vision_Decode( Data, &vision_Recv);
 }

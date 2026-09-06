@@ -12,7 +12,11 @@ __weak uint8_t Mecanum_Init(mecanumInit_typdef *mecanumInitT)
     mecanumInitT->wheel_r = 0.075f;
     mecanumInitT->half_wheelbase = 0.20f;   // 前后轮中心距的一半 (Lx)
     mecanumInitT->half_track_width = 0.20f; // 左右轮中心距的一半 (Ly)
+    mecanumInitT->chassis_r= 0.282842f;
     mecanumInitT->deceleration_ratio = 3591.0f / 187.0f;
+
+    mecanumInitT->M = 20.0f;
+    mecanumInitT->J = 1.0f;
     return 0;
 }
 
@@ -253,4 +257,22 @@ void Swerve_Send_Transform(Swerve_State_t2*state, Swerve_Command_t2 *cmd) {
         cmd->steer_I[i]=state->wheel[i].steer_torque_pid*NM_ENCODER_6020;
         cmd->wheel_I[i]=(state->wheel[i].wheel_torque_feedforward+state->wheel[i].wheel_torque_pid)*NM_ENCODER_3508;
     }
+}
+
+
+void Mecanum_Forward_Calc(mecanumInit_typdef *mecanum) {
+    mecanum->chassis_dx = (-mecanum->wheel_rad_s[0]+mecanum->wheel_rad_s[1]+mecanum->wheel_rad_s[2]-mecanum->wheel_rad_s[3])*mecanum->wheel_r*sqrtf(2.0f)/4.0f;
+    mecanum->chassis_dy = (-mecanum->wheel_rad_s[0]-mecanum->wheel_rad_s[1]+mecanum->wheel_rad_s[2]+mecanum->wheel_rad_s[3])*mecanum->wheel_r*sqrtf(2.0f)/4.0f;
+    mecanum->chassis_dw = (-mecanum->wheel_rad_s[0]-mecanum->wheel_rad_s[1]-mecanum->wheel_rad_s[2]-mecanum->wheel_rad_s[3])*mecanum->wheel_r*sqrtf(2.0f)/4.0f*(mecanum->half_track_width+mecanum->half_wheelbase);
+}
+
+void Mecanum_Force_Calc(mecanumInit_typdef *mecanum) {
+    mecanum->wheel_force[0] = mecanum->wheel_r*sqrtf(2.0f)/4.0f*(-mecanum->M*mecanum->chassis_ddx - mecanum->M*mecanum->chassis_ddy
+        - mecanum->J*mecanum->chassis_ddw/(mecanum->half_track_width+mecanum->half_wheelbase));
+    mecanum->wheel_force[1] = mecanum->wheel_r*sqrtf(2.0f)/4.0f*(mecanum->M*mecanum->chassis_ddx - mecanum->M*mecanum->chassis_ddy
+        - mecanum->J*mecanum->chassis_ddw/(mecanum->half_track_width+mecanum->half_wheelbase));
+    mecanum->wheel_force[2] = mecanum->wheel_r*sqrtf(2.0f)/4.0f*(mecanum->M*mecanum->chassis_ddx + mecanum->M*mecanum->chassis_ddy
+        - mecanum->J*mecanum->chassis_ddw/(mecanum->half_track_width+mecanum->half_wheelbase));
+    mecanum->wheel_force[3] = mecanum->wheel_r*sqrtf(2.0f)/4.0f*(-mecanum->M*mecanum->chassis_ddx + mecanum->M*mecanum->chassis_ddy
+        - mecanum->J*mecanum->chassis_ddw/(mecanum->half_track_width+mecanum->half_wheelbase));
 }

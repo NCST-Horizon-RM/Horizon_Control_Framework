@@ -22,6 +22,7 @@ void Get_UID(uint32_t *uid) {
     uid[2] = HAL_GetUIDw2();
 }
 void System_Init() {
+    //DWT初始化
     DWT_Init(168);
     Get_UID(stm32_id);
     //CAN滤波器初始化

@@ -56,15 +56,45 @@ static float Ramp_Calc(float target, float current, float acc_step, float dec_st
     return current;
 }
 
-uint8_t Mecanum_Init(mecanumInit_typdef *mecanumInitT)
+
+/**
+ * @brief 底盘控制初始化
+ * @param MOTOR 底盘电机总结构体指针
+ * @return uint8_t 初始化状态
+ */
+uint8_t Chassis_Init(Chassis_Cfg_t *cfg, Chassis_Type_e type)
 {
-    mecanumInitT->wheel_r = 0.076f;
-    mecanumInitT->half_wheelbase = 0.169f;   // 前后轮中心距的一半 (Lx)
-    mecanumInitT->half_track_width = 0.169f; // 左右轮中心距的一半 (Ly)
-    mecanumInitT->deceleration_ratio = 3591.0f / 187.0f;
+    if (cfg == NULL) return 1;
+
+    cfg->type = type;
+    cfg->mass = 17.5f;
+    cfg->inertia = 1.0f;
+    cfg->torque_to_raw = ((1.0f / (15.7647f * 0.0157f * 0.85f)) * (16384.0f / 20.0f));
+    for(int i=0; i<4; i++) cfg->steer_offset[i] = 0;
+    switch (type) {
+        case MECANUM:
+            cfg->wheel_r = 0.075f;
+            cfg->Lx = 0.20f;
+            cfg->Ly = 0.20f;
+            cfg->gear_ratio = 3591.0f / 187.0f;
+            break;
+        case OMNI:
+            cfg->wheel_r = 0.075f;
+            cfg->Lx = 0.2f;
+            cfg->Ly = 0.2f;
+            cfg->gear_ratio = 3591.0f / 187.0f;
+            break;
+        case SWERVE:
+            cfg->wheel_r = 0.06f;
+            cfg->Lx = 0.2f;
+            cfg->Ly = 0.22f;
+            cfg->gear_ratio = 15.76f;
+            break;
+        default:
+            return 1;
+    }
     return 0;
 }
-
 /**
  * @brief 底盘控制初始化
  * @param MOTOR 底盘电机总结构体指针
@@ -73,7 +103,7 @@ uint8_t Mecanum_Init(mecanumInit_typdef *mecanumInitT)
 uint8_t Chassis_Control_Init(void)
 {
     //底盘初始化
-    Chassis_Init(&chassis_ctrl.chassis_cfg,chassis_ctrl.chassis_cfg.type);
+    Chassis_Init(&chassis_ctrl.chassis_cfg,1);
 
     float PID_vx[3] = {9.0f,   0.0f,  0.0f};
     PID_Init(&chassis_ctrl.vx, 15.0f, 0.0f, PID_vx,
@@ -143,20 +173,10 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
     else
     {
         float vw_tar = chassis_cmd.target_vw;
-        // 底盘跟随模式下，计算底盘跟随PID
-        if (chassis_cmd.mode == CHASSIS_CMD_FOLLOW) {
-            PID_Calculate(&chassis_ctrl.Follow_Pos, chassis_cmd.offset_angle, 0.0f);
-            vw_tar = PID_Calculate(&chassis_ctrl.Follow_Spd, imu->gyro[2], chassis_ctrl.Follow_Pos.Output);
-        }
         // 非对称梯形加减速
         cur_vx_gimbal = Ramp_Calc(chassis_cmd.target_vx, cur_vx_gimbal, 5.0f, 100.0f,dt);
         cur_vy_gimbal = Ramp_Calc(chassis_cmd.target_vy, cur_vy_gimbal, 5.0f, 100.0f,dt);
         cur_vw        = Ramp_Calc(vw_tar,        cur_vw,        350.0f,  400.0f,dt);
-        // 底盘坐标系旋转矩阵
-        float cos_theta = arm_cos_f32(chassis_cmd.offset_angle);
-        float sin_theta = arm_sin_f32(chassis_cmd.offset_angle);
-        float cur_vx_chassis = cur_vx_gimbal * cos_theta + cur_vy_gimbal * sin_theta;
-        float cur_vy_chassis = cur_vy_gimbal * cos_theta - cur_vx_gimbal * sin_theta;
 
         for (int i = 0; i < 4; i++)
         {
@@ -164,8 +184,8 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
         }
         Chassis_Forward(&chassis_ctrl.chassis_cfg,&chassis_ctrl.chassis_feedback);
 
-        PID_Calculate(&chassis_ctrl.vx, chassis_ctrl.chassis_feedback.vx, cur_vx_chassis);
-        PID_Calculate(&chassis_ctrl.vy, chassis_ctrl.chassis_feedback.vy, cur_vy_chassis);
+        PID_Calculate(&chassis_ctrl.vx, chassis_ctrl.chassis_feedback.vx, cur_vx_gimbal);
+        PID_Calculate(&chassis_ctrl.vy, chassis_ctrl.chassis_feedback.vy, cur_vy_gimbal);
         PID_Calculate(&chassis_ctrl.vw, chassis_ctrl.chassis_feedback.vw, cur_vw);
 
         // 逆运动学与速度环 PID 计算

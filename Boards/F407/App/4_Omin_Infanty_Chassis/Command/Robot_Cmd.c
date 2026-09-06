@@ -2,17 +2,15 @@
 // Created by CaoKangqi on 2026/6/23.
 //
 #include "Robot_Cmd.h"
-#include "Robot_Config.h"
 #include "System_State.h"
 #include "DBUS.h"
-#include "Aim_Vision.h"
 #include "All_define.h"
-#include "BSP_UART.h"
-#include "Horizon_MATH.h"
-#include "Comm_DualBoard.h"
+#include "BSP_CAN.h"
 #include "Referee.h"
-#include "usart.h"
+#include "Robot_Config.h"
 #include "VT13.h"
+#include "dsp/fast_math_functions.h"
+#include "DualBoard_Frame.h"
 
 #define PITCH_MAX              25.0f
 #define PITCH_MIN             -20.0f
@@ -28,13 +26,15 @@
 #define MOUSE_PITCH_COEF       0.06f
 #define MOUSE_YAW_COEF         0.04f
 
+#define YAW_ZERO               1190
+
 // --- 本地静态内存缓存 ---
 
 Chassis_Cmd_t chassis_cmd = {0};
 Gimbal_Cmd_t gimbal_cmd = {0};
 Shoot_Cmd_t shoot_cmd = {0};
-
-
+//双板通讯
+C2G_t c2g = {0};
 // --- 私有函数声明 ---
 static void Cmd_Handle_Safe_Mode(void);
 static void Cmd_Update_Remote_Ctrl(void);
@@ -58,13 +58,7 @@ void Robot_Cmd_Update(void)
     {
         Cmd_Handle_Safe_Mode();
     }
-    if (DBUS.Ctrl_Mode == 1) {
-        Cmd_Update_Mouse_Key();
-    }
-    else {
-        Cmd_Update_Remote_Ctrl();
-    }
-
+    Cmd_Update_Remote_Ctrl();
 
     // 双板通信
     Cmd_DualBoard_Sync();
@@ -93,21 +87,13 @@ static void Cmd_Handle_Safe_Mode(void)
  */
 static void Cmd_Update_Remote_Ctrl(void)
 {
-    chassis_cmd.target_vx = (float)DBUS.Remote.CH1 * RC_ROCKER_XY_COEF + (float)VT13.Remote.Channel[1] * RC_ROCKER_XY_COEF;
-    chassis_cmd.target_vy = -(float)DBUS.Remote.CH0 * RC_ROCKER_XY_COEF + (float)VT13.Remote.Channel[0] * RC_ROCKER_XY_COEF;
-    float active_vw       = -(float)DBUS.Remote.CH2 * RC_ROCKER_VW_COEF + (float)VT13.Remote.Channel[3] * RC_ROCKER_VW_COEF;
-    gimbal_cmd.target_yaw   += (float)DBUS.Remote.CH3 * RC_YAW_COEF + (float)VT13.Remote.Channel[2] * RC_YAW_COEF;
+    int16_t relative_angle = YAW_ZERO - gimbal_motors.DM4310_Yaw.Angle_now;
+    chassis_cmd.offset_angle = normalize_to_pi((float)relative_angle * ENCODER_TO_RAD);;
 
-    if (VT13.Remote.mode_sw == 1 && VT13.Remote.fn_2 == 1) {
-        shoot_cmd.mode = SHOOT_CMD_FIRE;
-        shoot_cmd.trigger_single = true;
-    }else {
-        shoot_cmd.trigger_single = false;
-    }
+    chassis_cmd.target_vx = (float)DBUS.Remote.CH1 * RC_ROCKER_XY_COEF;
+    chassis_cmd.target_vy = -(float)DBUS.Remote.CH0 * RC_ROCKER_XY_COEF;
+    chassis_cmd.target_vw =(float)(DBUS.Remote.Dial+DBUS.Remote.CH2) * RC_ROCKER_VW_COEF;
     chassis_cmd.mode = CHASSIS_CMD_FREE;
-    shoot_cmd.mode = SHOOT_CMD_READY;
-    chassis_cmd.target_vw = active_vw;
-
 }
 
 /**
@@ -115,8 +101,8 @@ static void Cmd_Update_Remote_Ctrl(void)
  */
 static void Cmd_Update_Mouse_Key(void)
 {
-    chassis_cmd.target_vx = (DBUS.KeyBoard.W - DBUS.KeyBoard.S) * KB_WASD_COEF;
-    chassis_cmd.target_vy = (DBUS.KeyBoard.D - DBUS.KeyBoard.A) * KB_WASD_COEF;
+    chassis_cmd.target_vx = (float)g2c.vx * KB_WASD_COEF;
+    chassis_cmd.target_vy = (float)g2c.vy * KB_WASD_COEF;
     float active_vw       = (DBUS.KeyBoard.E - DBUS.KeyBoard.Q) * 3.0f + DBUS.Mouse.X_Flt * RC_ROCKER_VW_COEF;
 
     if (DBUS.KeyBoard.Shift) {
@@ -129,7 +115,7 @@ static void Cmd_Update_Mouse_Key(void)
         chassis_cmd.mode = CHASSIS_CMD_FOLLOW;
         chassis_cmd.target_vw = 0.0f;
     }
-
+    chassis_cmd.is_cap_on = g2c.key_v;
 }
 
 /**
@@ -138,4 +124,16 @@ static void Cmd_Update_Mouse_Key(void)
 static void Cmd_DualBoard_Sync(void)
 {
 
+}
+
+/**
+ * @brief 双板通信接收回调 (解算 Protocol_Rx_t)
+ * @note  必须挂载到 CAN Rx FIFO 中断的回调函数中
+ * @param device_ptr CAN设备指针(hcan)
+ * @param data 接收到的8字节数据指针
+ */
+void DualBoard_CAN_Rx_Callback(void *instance, uint8_t *data)
+{
+    if (instance == NULL || data == NULL) return;
+    G2C_unpack(data, (G2C_t *)instance);
 }

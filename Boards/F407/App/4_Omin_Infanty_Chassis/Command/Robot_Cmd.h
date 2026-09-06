@@ -35,28 +35,21 @@ typedef enum {
 typedef struct {
     Gimbal_Mode_e mode;
     float target_pitch;      // 目标 Pitch 角度
-    float target_pitch_rate; // 目标 Pitch 角速度
     float target_yaw;        // 目标 Yaw 角度
-    float target_yaw_rate;   // 目标 Yaw 角速度
 } Gimbal_Cmd_t;
 
 // 发射机构控制指令
 typedef enum {
     SHOOT_CMD_SAFE = 0,      // 安全锁死，摩擦轮停转，拨弹停止
-    SHOOT_CMD_READY,         // 摩擦轮停转，拨盘目标固定在当前位置
-    SHOOT_CMD_RUN,           // 摩擦轮启动
+    SHOOT_CMD_READY,         // 摩擦轮怠速/准备状态
     SHOOT_CMD_FIRE           // 允许开火状态
 } Shoot_Mode_e;
 
 typedef struct {
     Shoot_Mode_e mode;
+    float friction_rpm;      // 摩擦轮目标转速
     bool trigger_single;     // 单发
     bool trigger_auto;       // 连发
-    float heat_max;
-    float heat_now;
-    float cool;
-    uint8_t last_fn1;
-    uint8_t last_S1 ;
     uint8_t bullet_speed;    // 目标射速
 } Shoot_Cmd_t;
 
@@ -69,5 +62,4 @@ void Robot_Cmd_Update(void);
 
 void DualBoard_CAN_Rx_Callback(void *device_ptr, uint8_t *data);
 
-void Vision_UART_Rx_Callback(uint8_t* Data, void *device_ptr, uint16_t size);
 #endif //F4_FRAMEWORK_ROBOT_CMD_H

@@ -13,7 +13,6 @@
 
 static Gimbal_Ctrl_Block_t gimbal_ctrl;
 
-
 /**
  * @brief 云台控制初始化
  * @param MOTOR 云台电机总结构体指针
@@ -21,19 +20,18 @@ static Gimbal_Ctrl_Block_t gimbal_ctrl;
  */
 uint8_t Gimbal_Control_Init(void)
 {
-
     // Pitch PID参数初始化
-    float PID_Pitch_P[3] = {/*0.45*/0.3f,   0.0f,  0.0f};
+    float PID_Pitch_P[3] = {0.5f,   0.0f,  0.0f};
         PID_Init(&gimbal_ctrl.Pitch_P, 50.0f, 30.0f, PID_Pitch_P,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_Pitch_S[3] = {/*5.5*/4.0f,   /*0.02*/0.0f,   0.0f};
+    float PID_Pitch_S[3] = {-5.0f,   -0.02f,   0.0f};
     PID_Init(&gimbal_ctrl.Pitch_S, 30.0f, 5.0f, PID_Pitch_S,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     //Yaw PID参数初始化
-    float PID_Yaw_P[3] = {/*-0.28*/0.15f,   0.0f,  0.0f};
+    float PID_Yaw_P[3] = {0.35f,   0.0f,  0102.0f};
     PID_Init(&gimbal_ctrl.Yaw_P, 20.0f, 5.0f, PID_Yaw_P,
         0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_Yaw_S[3] = {/*-8.0*/-5.0f,   /*0.03*/0.0f,   0.0f};
+    float PID_Yaw_S[3] = {-6.0f,   -0.02f,   0.0f};
     PID_Init(&gimbal_ctrl.Yaw_S, 30.0f, 4.0f, PID_Yaw_S,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     //向系统下发底盘当前状态，准备中
@@ -78,7 +76,7 @@ void Gimbal_Control_Task(const Gimbal_Motor_Group_t *g_motor,const IMU_Data_t *g
         PID_Calculate(&gimbal_ctrl.Yaw_S,g_imu->gyro[2],gimbal_ctrl.Yaw_P.Output - 3*gimbal_cmd.target_yaw_rate);
 
         PID_Calculate(&gimbal_ctrl.Pitch_P,g_imu->pitch,gimbal_cmd.target_pitch);
-        PID_Calculate(&gimbal_ctrl.Pitch_S,g_imu->gyro[1],gimbal_ctrl.Pitch_P.Output + 3.5f*gimbal_cmd.target_pitch_rate);
+        PID_Calculate(&gimbal_ctrl.Pitch_S,g_imu->gyro[1],gimbal_ctrl.Pitch_P.Output - 3.5f*gimbal_cmd.target_pitch_rate);
     }
 
     DM_Motor_Send(&hcan1, 0x3FE,
