@@ -69,11 +69,11 @@ void Vision_Encode(Vision_Send_t *send_data, uint8_t *tx_buf)
     tx_buf[9]  = send_data->mode;
     // 弹速
     tx_buf[10] = send_data->bullet_speed;
-    // Yaw 角速度
-    f_cvt.f = send_data->yaw_omega;
-    memcpy(&tx_buf[11], f_cvt.buf, 4);
     // Pitch 角速度
     f_cvt.f = send_data->pitch_omega;
+    memcpy(&tx_buf[11], f_cvt.buf, 4);
+    // Yaw 角速度
+    f_cvt.f = send_data->yaw_omega;
     memcpy(&tx_buf[15], f_cvt.buf, 4);
     // 帧尾
     tx_buf[19] = VISION_EOF;

@@ -121,7 +121,6 @@ void IMU_Update_Task(IMU_Data_t *IMU,float dt_s)
 #ifdef DEBUG_MODE
             //DEBUG模式，不跳过状态
             imu_ctrl_state = TEMP_PID_CTRL;
-            imu_ctrl_state = GYRO_CALIB;
 #endif
 #ifdef RELEASE_MODE
             //Release模式，直接跳到零漂校准，节省时间

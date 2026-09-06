@@ -50,23 +50,6 @@ uint8_t Shoot_Control_Init(void)
 }
 
 /**
- * @brief 连发控制
- */
-void Smooth_Shoot_Control(void)
-{
-    //连发
-    shoot_ctrl.Feeder_Count.target_freq = MATH_Limit_float(shoot_ctrl.Feeder_Count.target_freq, 0.0f, 25.0f);
-    if (shoot_cmd.trigger_auto==1&&VT13.Remote.trigger==1)
-    {
-        shoot_ctrl.use_smoothing=1;
-    }
-    else if (shoot_cmd.trigger_auto ==1 && VT13.Remote.trigger  ==0)
-    {
-        shoot_ctrl.use_smoothing=0;
-    }
-}
-
-/**
  * @brief 卡弹检测TODO
  */
 void Automatic_Shoot_Control(const Shoot_Motor_Group_t *g_motor)
@@ -135,11 +118,10 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *g_motor, float dt)
         //连发模式同时已经开启摩擦轮
         if (shoot_cmd.mode == SHOOT_CMD_FIRE)
         {
-            Smooth_Shoot_Control();
             if (now - last_shot_time >= (uint32_t)interval) {
                 float current_target_angle = (float)shoot_ctrl.Feeder_Count.target_pos_cnt * shoot_ctrl.Counts_Shoot * (float)shoot_ctrl.dir_sign;
                 float angle_error = fabsf(current_target_angle - g_motor->DJI_2006_bo.Angle_Infinite);
-                // 只有当误差小于1.1发弹丸的角度时，才允许下发新的发弹指令
+                // 只有当误差小于1.5发弹丸的角度时，才允许下发新的发弹指令
                 if (angle_error < (1.5f * shoot_ctrl.Counts_Shoot)) {
                     shoot_ctrl.Feeder_Count.target_pos_cnt ++;////////
                 }
@@ -189,7 +171,6 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *g_motor, float dt)
 
     DJI_Motor_Send(&hcan2,0x200,shoot_ctrl.Lfire_S.Output,shoot_ctrl.Rfire_S.Output,0,0);
     DJI_Motor_Send(&hcan1,0x200,0,0,shoot_ctrl.Bmotor_S.Output,0 );
-    VOFA_JustFloat(&huart1, 5, shoot_cmd.heat_max,shoot_cmd.heat_now,shoot_cmd.cool,bullet_fired);
 }
 /**
  * @brief  动态 dt 射击检测函数
