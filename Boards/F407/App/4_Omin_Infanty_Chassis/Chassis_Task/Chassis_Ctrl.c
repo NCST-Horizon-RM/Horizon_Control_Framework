@@ -9,6 +9,7 @@
 #include "Referee.h"
 #include "System_State.h"
 #include "Robot_Cmd.h"
+#include "Vofa.h"
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
 //功率控制
@@ -82,7 +83,7 @@ uint8_t Chassis_Init(Chassis_Cfg_t *cfg, Chassis_Type_e type)
             cfg->wheel_r = 0.075f;
             cfg->Lx = 0.2f;
             cfg->Ly = 0.2f;
-            cfg->gear_ratio = 3591.0f / 187.0f;
+            cfg->gear_ratio = 15.76f;
             break;
         case SWERVE:
             cfg->wheel_r = 0.06f;
@@ -231,6 +232,8 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
                        (int16_t)chassis_ctrl.chassis_command.wheel_torque_raw[2],
                        (int16_t)chassis_ctrl.chassis_command.wheel_torque_raw[3]);
     }
+
+    VOFA_JustFloat(&h)
 }
 
 // 超级电容与缓冲能量调参宏定义

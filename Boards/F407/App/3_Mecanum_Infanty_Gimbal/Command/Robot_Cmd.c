@@ -64,6 +64,12 @@ void Robot_Cmd_Update(void)
         Cmd_Update_Remote_Ctrl();
     }
 
+    if (!vision_Recv.offline.is_online) {
+        System_State_Report(ID_VISION,STATUS_LOST);
+    }
+    else {
+        System_State_Report(ID_VISION,STATUS_RUN);
+    }
 
     // 双板通信
     Cmd_DualBoard_Sync();
@@ -105,7 +111,7 @@ static void Cmd_Update_Remote_Ctrl(void)
 
         gimbal_cmd.target_pitch_rate = vision_Recv.pitch_plan * DEG2RAD;
         gimbal_cmd.target_pitch = -vision_Recv.pitch;
-        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -13.0f, 31.0f);
+        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -31.0f, 13.0f);
     }
     else{
         gimbal_cmd.mode = GIMBAL_CMD_MANUAL;
@@ -115,25 +121,36 @@ static void Cmd_Update_Remote_Ctrl(void)
 
         gimbal_cmd.target_pitch_rate = (float)DBUS.Remote.CH3*RC_PITCH_COEF;
         gimbal_cmd.target_pitch -= gimbal_cmd.target_pitch_rate;
-        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -13.0f, 31.0f);
+        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -31.0f, 13.0f);
 
     }
 
     //发射
     shoot_cmd.mode = SHOOT_CMD_READY;
-    /*shoot_cmd.heat_max = C2G.heat_large;
+    shoot_cmd.heat_max = C2G.heat_large;
     shoot_cmd.heat_now = C2G.heat_last;
     shoot_cmd.cool = C2G.cooling;
-    shoot_cmd.trigger_single = (VT13.Remote.fn_1==1 && shoot_cmd.last_fn1==0);
-    shoot_cmd.trigger_auto   = (VT13.Remote.fn_2==1||VT13.Remote.trigger==1);
-    if (VT13.Remote.mode_sw != 0) {
+    shoot_cmd.trigger_single = (DBUS.Remote.S2==1 && shoot_cmd.last_fn1==3);
+    shoot_cmd.trigger_auto   = (DBUS.Remote.S2==2);
+    if (DBUS.Remote.S1!=2) {
+        if (DBUS.Remote.S2 != 3) {
+            shoot_cmd.mode = SHOOT_CMD_RUN;
+            if (shoot_cmd.trigger_single || shoot_cmd.trigger_auto)
+            {
+                shoot_cmd.mode = SHOOT_CMD_FIRE;
+            }
+        }
+        shoot_cmd.last_fn1 = DBUS.Remote.S2;
+    }
+
+    else {
         shoot_cmd.mode = SHOOT_CMD_RUN;
-        if (shoot_cmd.trigger_single || shoot_cmd.trigger_auto)
+        if (vision_Recv.target_found==1 && vision_Recv.fire_command==1)
         {
             shoot_cmd.mode = SHOOT_CMD_FIRE;
         }
     }
-    shoot_cmd.last_fn1 = VT13.Remote.fn_1;*/
+
 }
 
 /**

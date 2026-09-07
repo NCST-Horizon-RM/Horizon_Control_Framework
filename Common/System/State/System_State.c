@@ -112,6 +112,8 @@ static void Update_Error_Flags(bool remote_is_online, bool in_boot_grace_period)
     sys_state.error.bit.remote_lost  = !remote_is_online;
     sys_state.error.bit.referee_lost = !pwr_info.ref_online;
     sys_state.error.bit.imu_fault    = sys_state.task_health.IMU == STATUS_ERROR;
+    sys_state.error.bit.vision_lost  = (sys_state.task_health.Vision == STATUS_LOST ||
+                                        sys_state.task_health.Vision == STATUS_ERROR);
 
     if (Is_All_Tasks_Running() || in_boot_grace_period) {
         sys_state.error.bit.chassis_offline = 0;
@@ -135,7 +137,8 @@ static void Arbitrate_Global_Mode(uint32_t now) {
 
     Global_Mode_e next_mode = GLOBAL_NORMAL_MATCH;
 
-    if (sys_state.error.bit.chassis_offline || sys_state.error.bit.gimbal_offline || sys_state.error.bit.shoot_offline) {
+    if (sys_state.error.bit.chassis_offline || sys_state.error.bit.gimbal_offline ||
+        sys_state.error.bit.shoot_offline || sys_state.error.bit.vision_lost) {
         next_mode = GLOBAL_MODULE_ERROR;
     } else if (sys_state.error.bit.remote_lost) {
         next_mode = GLOBAL_STANDBY;
