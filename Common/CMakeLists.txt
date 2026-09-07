@@ -15,7 +15,5 @@ foreach(FILE_PATH ${COMMON_H_FILES})
 endforeach()
 list(REMOVE_DUPLICATES COMMON_INCLUDE_DIRS)
 
-add_library(Common STATIC ${COMMON_SOURCES}
-        Algorithm/Filter/Kalman_Odometer.c
-        Algorithm/Filter/Kalman_Odometer.h)
+add_library(Common STATIC ${COMMON_SOURCES})
 target_include_directories(Common PUBLIC ${COMMON_INCLUDE_DIRS})
