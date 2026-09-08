@@ -11,8 +11,8 @@
 #include "IMU_Task.h"
 #include "DualBoard_Frame.h"
 
-#define PITCH_MAX              25.0f
-#define PITCH_MIN             -20.0f
+#define PITCH_MAX              2.0f
+#define PITCH_MIN             -34.0f
 #define FRICTION_MAX_RPM       6500.0f
 #define FRICTION_RAMP_STEP     1.7f    //摩擦轮缓启动时长
 
@@ -111,7 +111,7 @@ static void Cmd_Update_Remote_Ctrl(void)
 
         gimbal_cmd.target_pitch_rate = vision_Recv.pitch_plan * DEG2RAD;
         gimbal_cmd.target_pitch = -vision_Recv.pitch;
-        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -31.0f, 13.0f);
+        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, PITCH_MIN, PITCH_MAX);
     }
     else{
         gimbal_cmd.mode = GIMBAL_CMD_MANUAL;
@@ -121,7 +121,7 @@ static void Cmd_Update_Remote_Ctrl(void)
 
         gimbal_cmd.target_pitch_rate = (float)DBUS.Remote.CH3*RC_PITCH_COEF;
         gimbal_cmd.target_pitch -= gimbal_cmd.target_pitch_rate;
-        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -31.0f, 13.0f);
+        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, PITCH_MIN, PITCH_MAX);
 
     }
 

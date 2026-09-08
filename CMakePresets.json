@@ -62,6 +62,24 @@
             }
         },
         {
+            "name": "F407-4_Omin_Infanty_Gimbal-Debug",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/Boards/F407/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ACTIVE_APP": "4_Omin_Infanty_Gimbal"
+            }
+        },
+        {
+            "name": "F407-4_Omin_Infanty_Gimbal-Release",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/Boards/F407/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ACTIVE_APP": "4_Omin_Infanty_Gimbal"
+            }
+        },
+        {
             "name": "H723-1_Catapult_Hero-Debug",
             "inherits": "base",
             "toolchainFile": "${sourceDir}/Boards/H723/cmake/gcc-arm-none-eabi.cmake",
@@ -104,6 +122,14 @@
         {
             "name": "F407-4_Omin_Infanty_Chassis-Release",
             "configurePreset": "F407-4_Omin_Infanty_Chassis-Release"
+        },
+        {
+            "name": "F407-4_Omin_Infanty_Gimbal-Debug",
+            "configurePreset": "F407-4_Omin_Infanty_Gimbal-Debug"
+        },
+        {
+            "name": "F407-4_Omin_Infanty_Gimbal-Release",
+            "configurePreset": "F407-4_Omin_Infanty_Gimbal-Release"
         },
         {
             "name": "H723-1_Catapult_Hero-Debug",
