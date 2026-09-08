@@ -9,9 +9,12 @@
 #include "Referee.h"
 #include "System_State.h"
 #include "Robot_Cmd.h"
+#include "Chassis_ESKF.h"
 #include "Vofa.h"
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
+static Chassis_ESKF_t chassis_eskf;
+Chassis_ESKF_Output_t eskf_out = {0};
 //功率控制
 static Power_Ctrl_t chassis_model;
 static Motor_Power_State_t m_states[4];//底盘共4个电机
@@ -100,6 +103,7 @@ uint8_t Chassis_Control_Init(void)
 {
     //底盘初始化
     Chassis_Init(&chassis_ctrl.chassis_cfg,OMNI);
+    Chassis_ESKF_Init(&chassis_eskf);
 
     float PID_vx[3] = {9.0f,   0.0f,  0.0f};
     PID_Init(&chassis_ctrl.vx, 15.0f, 0.0f, PID_vx,
@@ -173,6 +177,32 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
             chassis_ctrl.chassis_feedback.wheel_rpm[i] = c_motor->DJI_3508_Chassis[i].Speed_now;
         }
         Chassis_Forward(&chassis_ctrl.chassis_cfg,&chassis_ctrl.chassis_feedback);
+
+        if (imu != NULL && imu_ctrl_flag.fusion_enabled)
+        {
+            Chassis_ESKF_Input_t eskf_in = {
+                .dt = dt,
+                .wheel_vx = chassis_ctrl.chassis_feedback.vx,
+                .wheel_vy = chassis_ctrl.chassis_feedback.vy,
+                .wheel_vw = chassis_ctrl.chassis_feedback.vw,
+                .wheel_valid = Is_Group_Online(CHASSIS) ? 1 : 0,
+                .imu_gx = imu->gyro[0],
+                .imu_gy = imu->gyro[1],
+                .imu_gz = imu->gyro[2],
+                .imu_ax = imu->accel[0],
+                .imu_ay = imu->accel[1],
+                .imu_az = imu->accel[2],
+                .roll = imu->roll * DEG2RAD,
+                .pitch = imu->pitch * DEG2RAD,
+                .attitude_valid = 1,
+            };
+            Chassis_ESKF_Update(&chassis_eskf, &eskf_in, &eskf_out);
+            chassis_ctrl.chassis_feedback.vx = eskf_out.vx;
+            chassis_ctrl.chassis_feedback.vy = eskf_out.vy;
+            chassis_ctrl.chassis_feedback.vw = eskf_out.vw;
+        }
+        VOFA_JustFloat(&huart6,6,chassis_ctrl.chassis_feedback.vx,chassis_ctrl.chassis_feedback.vy,chassis_ctrl.chassis_feedback.vw,
+            eskf_out.vx, eskf_out.vy, eskf_out.vw);
 
         float vw_tar = chassis_cmd.target_vw;
         // 底盘跟随模式下，计算底盘跟随PID
