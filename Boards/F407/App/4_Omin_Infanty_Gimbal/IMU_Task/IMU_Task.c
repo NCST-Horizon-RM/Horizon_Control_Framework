@@ -121,6 +121,7 @@ void IMU_Update_Task(IMU_Data_t *IMU,float dt_s)
 #ifdef DEBUG_MODE
             //DEBUG模式，不跳过状态
             imu_ctrl_state = TEMP_PID_CTRL;
+            imu_ctrl_state = GYRO_CALIB;
 #endif
 #ifdef RELEASE_MODE
             //Release模式，直接跳到零漂校准，节省时间
@@ -164,9 +165,9 @@ void IMU_Update_Task(IMU_Data_t *IMU,float dt_s)
             System_State_Report(ID_IMU,STATUS_RUN);
             //旋转矩阵切换
             const float AXIS_MAP[3][3] = {
-                {1.0f, 0.0f, 0.0f}, // Logical X = + Physical X
-                {0.0f, 1.0f, 0.0f}, // Logical Y = + Physical Y
-                {0.0f, 0.0f, 1.0f}  // Logical Z = + Physical Z
+                {0.0f, -1.0f, 0.0f}, // Logical X = + Physical X
+                {0.0f, 0.0f, 1.0f}, // Logical Y = + Physical Y
+                {-1.0f, 0.0f, 0.0f}  // Logical Z = + Physical Z
             };
             float gyro_phy[3];
             float accel_phy[3];
@@ -188,7 +189,7 @@ void IMU_Update_Task(IMU_Data_t *IMU,float dt_s)
             imu_ctrl_flag.fusion_enabled = 1;
             break;
         case ERROR_STATE:
-            //System_State_Report(ID_IMU,STATUS_ERROR);
+            System_State_Report(ID_IMU,STATUS_ERROR);
             if (BMI088_Init() == 1) // 尝试重新初始化IMU，成功则认为错误已恢复
             {
                 imu_ctrl_state = TEMP_INIT; // 成功则回到初始状态
