@@ -45,7 +45,7 @@ static uint16_t gyro_calib_cnt   = 0;//陀螺仪校准计数
 static float heater_pwm_out   = 0;// 当前加热片PWM输出值
 static IMU_Fusion_Algo_e current_fusion_algo = VQF;
 //IMU加速度计偏心补偿
-static const float LEVER_ARM_OFFSET[3] = {0.19f, 0.0f, 0.0f};//IMU 相对旋转中心的偏移量（单位：米）
+static const float LEVER_ARM_OFFSET[3] = {0.177f, -0.002f, 0.0f};//IMU 相对旋转中心的偏移量（单位：米）
 // 角加速度低通系数（0~1），越小越平滑，越大响应越快
 #define LEVER_ARM_ALPHA_LPF     0.25f
 // 加速度单位转换系数
@@ -73,56 +73,57 @@ static inline void Vec3_Cross(const float a[3], const float b[3], float out[3])
  * @param IMU  IMU数据结构体指针（要求 gyro 单位为 rad/s）
  * @param dt   采样周期(s)
  */
+#define GYRO_HIST_LEN 8   // 窗口长度，噪声抑制约 2.8 倍
+
+static float gyro_hist[3][GYRO_HIST_LEN];
+static float gyro_ma_prev[3] = {0};  // 上一周期的滑动平均
+static uint8_t hist_idx = 0;
+static uint8_t hist_filled = 0;
+
 static void IMU_Accel_LeverArm_Compensate(IMU_Data_t *IMU, float dt)
 {
     if (dt < 1e-6f) dt = 0.001f;
 
-    // 首次初始化，避免差分爆炸
-    if (!lever_arm_initialized)
-    {
-        lever_gyro_prev[0] = IMU->gyro[0];
-        lever_gyro_prev[1] = IMU->gyro[1];
-        lever_gyro_prev[2] = IMU->gyro[2];
-        lever_arm_initialized = 1;
-        return;
+    // ---------- 1. 滑动平均 ----------
+    for (int i = 0; i < 3; i++) {
+        gyro_hist[i][hist_idx] = IMU->gyro[i];
+    }
+    hist_idx = (hist_idx + 1) % GYRO_HIST_LEN;
+    if (!hist_filled && hist_idx == 0) hist_filled = 1;
+
+    uint8_t len = hist_filled ? GYRO_HIST_LEN : hist_idx;
+    if (len < 2) return;  // 数据不够，暂不补偿
+
+    float gyro_ma[3] = {0};
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < len; j++) {
+            gyro_ma[i] += gyro_hist[i][j];
+        }
+        gyro_ma[i] /= (float)len;
     }
 
-    // 1. 角加速度（差分）
-    float alpha_raw[3];
-    alpha_raw[0] = (IMU->gyro[0] - lever_gyro_prev[0]) / dt;
-    alpha_raw[1] = (IMU->gyro[1] - lever_gyro_prev[1]) / dt;
-    alpha_raw[2] = (IMU->gyro[2] - lever_gyro_prev[2]) / dt;
+    // ---------- 2. 对滑动平均值差分（噪声小得多）----------
+    float alpha[3];
+    for (int i = 0; i < 3; i++) {
+        alpha[i] = (gyro_ma[i] - gyro_ma_prev[i]) / dt;
+        gyro_ma_prev[i] = gyro_ma[i];
+    }
 
-    lever_gyro_prev[0] = IMU->gyro[0];
-    lever_gyro_prev[1] = IMU->gyro[1];
-    lever_gyro_prev[2] = IMU->gyro[2];
-
-    // 2. 低通滤波（抑制差分噪声）
-    lever_alpha_lpf[0] = LEVER_ARM_ALPHA_LPF * alpha_raw[0] + (1.0f - LEVER_ARM_ALPHA_LPF) * lever_alpha_lpf[0];
-    lever_alpha_lpf[1] = LEVER_ARM_ALPHA_LPF * alpha_raw[1] + (1.0f - LEVER_ARM_ALPHA_LPF) * lever_alpha_lpf[1];
-    lever_alpha_lpf[2] = LEVER_ARM_ALPHA_LPF * alpha_raw[2] + (1.0f - LEVER_ARM_ALPHA_LPF) * lever_alpha_lpf[2];
-
-    // 3. 计算补偿量
-    // 向心项：omega × (omega × r)
+    // ---------- 3. 向心项 ----------
     float omega_cross_r[3];
     Vec3_Cross(IMU->gyro, LEVER_ARM_OFFSET, omega_cross_r);
 
     float centripetal[3];
     Vec3_Cross(IMU->gyro, omega_cross_r, centripetal);
 
-    // 切向项：alpha × r
+    // ---------- 4. 切向项 ----------
     float tangential[3];
-    Vec3_Cross(lever_alpha_lpf, LEVER_ARM_OFFSET, tangential);
+    Vec3_Cross(alpha, LEVER_ARM_OFFSET, tangential);
 
-    // 4. 应用补偿
-    float comp[3];
-    comp[0] = (centripetal[0] + tangential[0]) * LEVER_ARM_ACCEL_FACTOR;
-    comp[1] = (centripetal[1] + tangential[1]) * LEVER_ARM_ACCEL_FACTOR;
-    comp[2] = (centripetal[2] + tangential[2]) * LEVER_ARM_ACCEL_FACTOR;
-
-    IMU->accel[0] -= comp[0];
-    IMU->accel[1] -= comp[1];
-    IMU->accel[2] -= comp[2];
+    // ---------- 5. 应用补偿 ----------
+    IMU->accel[0] -= (centripetal[0] + tangential[0]);
+    IMU->accel[1] -= (centripetal[1] + tangential[1]);
+    IMU->accel[2] -= (centripetal[2] + tangential[2]);
 }
 /**
  * @brief 设置加热片PWM输出
