@@ -2,6 +2,8 @@
 // Created by CaoKangqi on 2026/6/20.
 //
 #include "Chassis_Ctrl.h"
+
+#include "All_define.h"
 #include "Comm_DualBoard.h"
 #include "Robot_Config.h"
 #include "Power_CAP.h"

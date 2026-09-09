@@ -203,8 +203,8 @@ static void Cmd_DualBoard_Sync(void)
 
     vision_Send.pitch = -IMU_Data.pitch;
     vision_Send.yaw = -IMU_Data.yaw;
-    vision_Send.pitch_omega = -IMU_Data.gyro[1];
-    vision_Send.yaw_omega = -IMU_Data.gyro[2];
+    vision_Send.pitch_omega = -IMU_Data.gyro[1]*RAD2DEG;
+    vision_Send.yaw_omega = -IMU_Data.gyro[2] * RAD2DEG;
     vision_Send.mode = 0;
     vision_Send.bullet_speed = 0;
 

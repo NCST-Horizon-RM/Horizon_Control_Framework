@@ -111,10 +111,10 @@ uint8_t Chassis_Control_Init(void)
     PID_Init(&chassis_ctrl.vw, 18.0f, 0.0f, PID_vw,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     // 底盘跟随PID初始化
-    float PID_Follow_Pos[3] = {10.0f,   0.0f,   0.0f};
+    float PID_Follow_Pos[3] = {18.0f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Pos, 15.0f, 0.0f, PID_Follow_Pos,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_Follow_Spd[3] = {1.0f,   0.0f,   0.0f};
+    float PID_Follow_Spd[3] = {2.0f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Spd, 15.0f, 1.0f, PID_Follow_Spd,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     // 功率控制初始化及参数配置
