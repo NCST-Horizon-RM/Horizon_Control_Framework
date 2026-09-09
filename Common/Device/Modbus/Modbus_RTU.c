@@ -7,6 +7,39 @@
 #include "Modbus_RTU.h"
 #include <string.h>
 
+uint16_t Modbus_BuildWriteSingleCoil(uint8_t *buffer, uint8_t slave_addr,
+                                    uint16_t address, bool on)
+{
+    if (buffer == NULL || slave_addr < 1U || slave_addr > 247U) return 0;
+    buffer[0] = slave_addr;
+    buffer[1] = MODBUS_FC_WRITE_SINGLE_COIL;
+    buffer[2] = (uint8_t)(address >> 8);
+    buffer[3] = (uint8_t)address;
+    buffer[4] = on ? 0xff : 0;
+    buffer[5] = 0;
+    uint16_t crc = Modbus_CRC16(buffer, 6);
+    buffer[6] = (uint8_t)crc;
+    buffer[7] = (uint8_t)(crc >> 8);
+    return 8;
+}
+
+Modbus_ParseResult_e Modbus_ParseWriteSingleCoilResponse(const uint8_t *response,
+    uint16_t length, uint8_t slave_addr, uint16_t address, bool on)
+{
+    if (response == NULL || (length != 5U && length != 8U)) return MODBUS_PARSE_INVALID_LENGTH;
+    if (response[0] != slave_addr) return MODBUS_PARSE_INVALID_SLAVE_ADDR;
+    uint16_t crc = (uint16_t)(response[length - 2] | (response[length - 1] << 8));
+    if (Modbus_CRC16(response, (uint16_t)(length - 2)) != crc) return MODBUS_PARSE_INVALID_CRC;
+    if (length == 5U && response[1] == (MODBUS_FC_WRITE_SINGLE_COIL | 0x80U))
+        return MODBUS_PARSE_EXCEPTION_RESPONSE;
+    if (response[1] != MODBUS_FC_WRITE_SINGLE_COIL) return MODBUS_PARSE_INVALID_FUNCTION_CODE;
+    if (length != 8U) return MODBUS_PARSE_INVALID_LENGTH;
+    if (response[2] != (uint8_t)(address >> 8) || response[3] != (uint8_t)address ||
+        response[4] != (on ? 0xffU : 0U) || response[5] != 0U)
+        return MODBUS_PARSE_DATA_MISMATCH;
+    return MODBUS_PARSE_OK;
+}
+
 /**
  * @brief 计算 Modbus RTU CRC16 校验
  * CRC16-MODBUS: 多项式 0xA001（反转的 0x8005），初始值 0xFFFF

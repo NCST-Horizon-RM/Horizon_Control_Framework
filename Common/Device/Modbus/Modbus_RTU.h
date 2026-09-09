@@ -61,6 +61,13 @@ uint16_t Modbus_CRC16(const uint8_t *data, uint16_t length);
 uint16_t Modbus_BuildReadCoils(uint8_t *buffer, uint8_t slave_addr,
                                 uint16_t start_addr, uint16_t quantity);
 
+// FC05：开启编码 FF00，关闭编码 0000；buffer 至少 8 字节。
+uint16_t Modbus_BuildWriteSingleCoil(uint8_t *buffer, uint8_t slave_addr,
+                                    uint16_t address, bool on);
+// 校验 FC05 应答的站号、CRC、地址与写入值。成功仅代表协议确认，仍需 FC01 读回。
+Modbus_ParseResult_e Modbus_ParseWriteSingleCoilResponse(const uint8_t *response,
+    uint16_t length, uint8_t slave_addr, uint16_t address, bool on);
+
 /**
  * @brief 构建读取离散输入的 Modbus RTU 请求（功能码 0x02）
  * @param buffer: 输出缓冲区（至少 8 字节）
