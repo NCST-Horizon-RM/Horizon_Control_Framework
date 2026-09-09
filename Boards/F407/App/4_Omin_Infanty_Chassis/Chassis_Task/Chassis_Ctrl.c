@@ -27,38 +27,6 @@ static float Chassis_Power_Arbitrator(float base_power_limit,
                                       const Cap_t *cap_data,
                                       bool *out_discharge,
                                       float *out_cap_limit);
-/**
- * @brief  非对称线性斜坡限幅函数
- * @param  target      目标值
- * @param  current     当前值
- * @param  acc_step    加速最大步长 (绝对值)
- * @param  dec_step    减速最大步长 (绝对值)
- * @return float       经过限制的当前值
- */
-static float Ramp_Calc(float target, float current, float acc_step, float dec_step, float dt)
-{
-    float step = 0.0f;
-    bool is_accelerating = false;
-    if (current >= 0.0f && target > current) {
-        is_accelerating = true;
-    }
-    else if (current <= 0.0f && target < current) {
-        is_accelerating = true;
-    }
-    step = is_accelerating ? acc_step * dt : dec_step * dt;
-    if (target > current) {
-        current += step;
-        if (current > target) {
-            current = target;
-        }
-    } else if (target < current) {
-        current -= step;
-        if (current < target) {
-            current = target;
-        }
-    }
-    return current;
-}
 
 uint8_t Chassis_Init(Chassis_Cfg_t *cfg, Chassis_Type_e type)
 {
@@ -105,13 +73,13 @@ uint8_t Chassis_Control_Init(void)
     Chassis_Init(&chassis_ctrl.chassis_cfg,OMNI);
     Chassis_ESKF_Init(&chassis_eskf);
 
-    float PID_vx[3] = {9.0f,   0.0f,  0.0f};
-    PID_Init(&chassis_ctrl.vx, 15.0f, 0.0f, PID_vx,
+    float PID_vx[3] = {12.0f,   0.0f,  0.01f};
+    PID_Init(&chassis_ctrl.vx, 12.0f, 0.0f, PID_vx,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_vy[3] = {9.0f,   0.0f,  0.0f};
-    PID_Init(&chassis_ctrl.vy, 15.0f, 0.0f, PID_vy,
+    float PID_vy[3] = {12.0f,   0.0f,  0.01f};
+    PID_Init(&chassis_ctrl.vy, 12.0f, 0.0f, PID_vy,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_vw[3] = {12.0f,   0.0f,  0.0f};
+    float PID_vw[3] = {10.0f,   0.0f,  0.0f};
     PID_Init(&chassis_ctrl.vw, 18.0f, 0.0f, PID_vw,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     // 底盘跟随PID初始化
@@ -197,12 +165,12 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
                 .attitude_valid = 1,
             };
             Chassis_ESKF_Update(&chassis_eskf, &eskf_in, &eskf_out);
+            VOFA_JustFloat(&huart6,9,chassis_ctrl.chassis_feedback.vx,chassis_ctrl.chassis_feedback.vy,chassis_ctrl.chassis_feedback.vw,
+            eskf_out.vx, eskf_out.vy, eskf_out.vw,imu->pitch,imu->roll,eskf_out.slip_score);
             chassis_ctrl.chassis_feedback.vx = eskf_out.vx;
             chassis_ctrl.chassis_feedback.vy = eskf_out.vy;
             chassis_ctrl.chassis_feedback.vw = eskf_out.vw;
         }
-        VOFA_JustFloat(&huart6,6,chassis_ctrl.chassis_feedback.vx,chassis_ctrl.chassis_feedback.vy,chassis_ctrl.chassis_feedback.vw,
-            eskf_out.vx, eskf_out.vy, eskf_out.vw);
 
         float vw_tar = chassis_cmd.target_vw;
         // 底盘跟随模式下，计算底盘跟随PID
@@ -211,9 +179,9 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
             vw_tar = PID_Calculate(&chassis_ctrl.Follow_Spd, chassis_ctrl.chassis_feedback.vw, chassis_ctrl.Follow_Pos.Output);
         }
         // 非对称梯形加减速
-        cur_vx_gimbal = Ramp_Calc(chassis_cmd.target_vx, cur_vx_gimbal, 5.0f, 100.0f,dt);
-        cur_vy_gimbal = Ramp_Calc(chassis_cmd.target_vy, cur_vy_gimbal, 5.0f, 100.0f,dt);
-        cur_vw        = Ramp_Calc(vw_tar,        cur_vw,        350.0f,  400.0f,dt);
+        cur_vx_gimbal = chassis_cmd.target_vx;
+        cur_vy_gimbal = chassis_cmd.target_vy;
+        cur_vw        = vw_tar;
         // 底盘坐标系旋转矩阵
         float cos_theta = arm_cos_f32(chassis_cmd.offset_angle);
         float sin_theta = arm_sin_f32(chassis_cmd.offset_angle);
@@ -244,11 +212,12 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
         else {
             trigger_discharge = FALSE;
             cap_board_limit = 45.0f;//
-            final_limit = 75.0f;
+            final_limit = 150.0f;
         }
         Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 1);
         for(int i = 0; i < 4; i++) {
             chassis_ctrl.chassis_command.wheel_torque_raw[i] = m_states[i].limited_cmd;
+            chassis_ctrl.chassis_command.wheel_torque_raw[i] = MATH_Limit_float(chassis_ctrl.chassis_command.wheel_torque_raw[i],-16000,16000);
         }
         // 下发电容通讯数据
         CapSetData_t cap_cmd = {0};

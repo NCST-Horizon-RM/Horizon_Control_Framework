@@ -266,17 +266,17 @@ void Chassis_ESKF_Init(Chassis_ESKF_t *f)
 
     memset(f, 0, sizeof(*f));
     f->gravity = 9.80665f;
-    f->sigma_acc = 2.0f;
+    f->sigma_acc = 1.0f;
     f->sigma_bias_acc = 0.12f;
     f->sigma_bias_gyr = 0.02f;
-    f->wheel_v_meas_std = 0.06f;
-    f->wheel_w_meas_std = 0.03f;
-    f->slip_gain = 120.0f;
-    f->slip_threshold_v = 0.08f;
-    f->slip_threshold_w = 0.12f;
-    f->static_gyro_th = 0.03f;
-    f->static_wheel_v_th = 0.03f;
-    f->static_wheel_w_th = 0.05f;
+    f->wheel_v_meas_std = 0.005f;
+    f->wheel_w_meas_std = 0.02f;
+    f->slip_gain = 500.0f;
+    f->slip_threshold_v = 0.005f;
+    f->slip_threshold_w = 0.03f;
+    f->static_gyro_th = 0.02f;
+    f->static_wheel_v_th = 0.02f;
+    f->static_wheel_w_th = 0.03f;
     Chassis_ESKF_Reset(f);
 }
 
