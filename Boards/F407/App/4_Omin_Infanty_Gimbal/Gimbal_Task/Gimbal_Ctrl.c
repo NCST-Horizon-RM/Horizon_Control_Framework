@@ -61,13 +61,10 @@ void Gimbal_Control_Task(const Gimbal_Motor_Group_t *g_motor,const IMU_Data_t *g
     if (gimbal_cmd.mode == GIMBAL_CMD_SAFE || is_system_locked)
     {
         // 清空PID
-        for (int i = 0; i < 4; i++) {
-            PID_Clear(&gimbal_ctrl.Pitch_P);
-            PID_Clear(&gimbal_ctrl.Pitch_S);
-            PID_Clear(&gimbal_ctrl.Yaw_P );
-            PID_Clear(&gimbal_ctrl.Yaw_S );
-
-        }
+        PID_Clear(&gimbal_ctrl.Pitch_P);
+        PID_Clear(&gimbal_ctrl.Pitch_S);
+        PID_Clear(&gimbal_ctrl.Yaw_P );
+        PID_Clear(&gimbal_ctrl.Yaw_S );
     }
     else
     {
