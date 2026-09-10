@@ -19,12 +19,12 @@
 #define RC_ROCKER_XY_COEF      0.004f  // 摇杆控制平移的增益
 #define RC_ROCKER_VW_COEF      0.02f   // 摇杆控制自旋的增益
 #define RC_PITCH_COEF          0.001f
-#define RC_YAW_COEF            0.002f
+#define RC_YAW_COEF            0.003f
 
-#define KB_WASD_COEF           330.0f    // 键盘 WASD 速度增益
-#define KB_VW_COEF             660.0f
-#define MOUSE_PITCH_COEF       0.06f
-#define MOUSE_YAW_COEF         0.04f
+#define KB_WASD_COEF           2.5f    // 键盘 WASD 速度增益
+#define KB_VW_COEF             10.0f
+#define MOUSE_PITCH_COEF       0.005f
+#define MOUSE_YAW_COEF         0.005f
 #define KB_YAW_COEF            2.0f
 
 #define YAW_ZERO               5100
@@ -158,7 +158,31 @@ static void Cmd_Update_Remote_Ctrl(void)
  */
 static void Cmd_Update_Mouse_Key(void)
 {
+    chassis_cmd.target_vx = (float)(DBUS.KeyBoard.W - DBUS.KeyBoard.S) * KB_WASD_COEF;
+    chassis_cmd.target_vy = (float)(DBUS.KeyBoard.A - DBUS.KeyBoard.D) * KB_WASD_COEF;
+    chassis_cmd.target_vw =-(float)DBUS.KeyBoard.Shift * KB_VW_COEF;
+    //云台
+    if (vision_Recv.target_found==1 && DBUS.Mouse.R_State==1 && vision_Recv.offline.is_online) {
+        gimbal_cmd.mode = GIMBAL_CMD_AUTO_AIM;
+        gimbal_cmd.target_yaw_rate = vision_Recv.yaw_plan * DEG2RAD;
+        gimbal_cmd.target_yaw = -vision_Recv.yaw;
+        gimbal_cmd.target_yaw = normalize_to_pi(gimbal_cmd.target_yaw * DEG2RAD) * RAD2DEG;
 
+        gimbal_cmd.target_pitch_rate = vision_Recv.pitch_plan * DEG2RAD;
+        gimbal_cmd.target_pitch = -vision_Recv.pitch;
+        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, PITCH_MIN, PITCH_MAX);
+    }
+    else{
+        gimbal_cmd.mode = GIMBAL_CMD_MANUAL;
+        gimbal_cmd.target_yaw_rate = -DBUS.Mouse.X_Flt * MOUSE_YAW_COEF;
+        gimbal_cmd.target_yaw += gimbal_cmd.target_yaw_rate;
+        gimbal_cmd.target_yaw = normalize_to_pi(gimbal_cmd.target_yaw * DEG2RAD) * RAD2DEG;
+
+        gimbal_cmd.target_pitch_rate = DBUS.Mouse.Y_Flt * MOUSE_PITCH_COEF;
+        gimbal_cmd.target_pitch -= gimbal_cmd.target_pitch_rate;
+        gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, PITCH_MIN, PITCH_MAX);
+
+    }
 }
 
 /**
