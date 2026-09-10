@@ -247,7 +247,7 @@ void IMU_Update_Task(IMU_Data_t *IMU,float dt_s)
             const float AXIS_MAP[3][3] = {
                 {0.0f, -1.0f, 0.0f}, // Logical X = + Physical X
                 {0.0f, 0.0f, 1.0f}, // Logical Y = + Physical Y
-                {-1.0f, 0.0f, 1.0f}  // Logical Z = + Physical Z
+                {-1.0f, 0.0f, 0.0f}  // Logical Z = + Physical Z
             };
             float gyro_phy[3];
             float accel_phy[3];

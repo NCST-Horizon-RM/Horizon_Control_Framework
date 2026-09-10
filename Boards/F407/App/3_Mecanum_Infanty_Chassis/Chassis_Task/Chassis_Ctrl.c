@@ -15,8 +15,8 @@ static Chassis_Ctrl_Block_t chassis_ctrl;
 //功率控制
 static Power_Ctrl_t chassis_model;
 static Motor_Power_State_t m_states[4];//底盘共4个电机
-static Power_Node_t drive_nodes[4]; // 用于驱动电机
-static Power_Group_t pwr_groups[1];//一个电机组
+static Power_Motion_Node_t motion_nodes[4];
+static Power_Motion_Result_t chassis_power_result;
 
 static float Chassis_Power_Arbitrator(float base_power_limit,
                                       float cur_buffer,
@@ -121,11 +121,10 @@ uint8_t Chassis_Control_Init(void)
     Power_Ctrl_Init(&chassis_model);
     for(int i=0; i<4; i++) {
         // 配置驱动轮节点，3508 功率模型
-        drive_nodes[i].state = &m_states[i];
-        drive_nodes[i].model = &MODEL_M3508;
+        motion_nodes[i].motor.state = &m_states[i];
+        motion_nodes[i].motor.model = &MODEL_M3508;
+        motion_nodes[i].max_cmd = 16000.0f;
     }
-    pwr_groups[0].nodes = drive_nodes;
-    pwr_groups[0].node_count = 4;
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
     return 1;
@@ -217,7 +216,13 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
             cap_board_limit = 45.0f;//
             final_limit = 75.0f;
         }
-        Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 1);
+        /* 此底盘尚未拆分运动电流，将原始合成请求作为单一分量统一缩放。 */
+        for (uint8_t wheel_index = 0; wheel_index < 4; wheel_index++) {
+            motion_nodes[wheel_index].translation_cmd = m_states[wheel_index].original_cmd;
+            motion_nodes[wheel_index].rotation_cmd = 0.0f;
+        }
+        if (final_limit < 0.0f) final_limit = 0.0f;
+        Power_Ctrl_Allocate_Motion(&chassis_model, final_limit, motion_nodes, 4, &chassis_power_result);
         for(int i = 0; i < 4; i++) {
             chassis_ctrl.chassis_command.wheel_torque_raw[i] = m_states[i].limited_cmd;
         }

@@ -18,9 +18,6 @@ static Chassis_ESKF_t chassis_eskf;
 Chassis_ESKF_Output_t eskf_out = {0};
 //功率控制
 static Power_Ctrl_t chassis_model;
-static Motor_Power_State_t m_states[4];//底盘共8个电机
-static Power_Node_t drive_nodes[4]; // 用于驱动电机
-static Power_Group_t pwr_groups[1];//两个电机组
 
 static float Chassis_Power_Arbitrator(float base_power_limit,
                                       float cur_buffer,
@@ -96,15 +93,6 @@ uint8_t Chassis_Control_Init(void)
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
         }
     Power_Ctrl_Init(&chassis_model);
-    for(int i=0; i<4; i++) {
-        // 配置驱动轮节点 (绑定 3508 模型)
-        drive_nodes[i].state = &m_states[i];
-        drive_nodes[i].model = &MODEL_M3508;
-    }
-    // 配置优先级：
-    // groups[0]: 低优先级，驱动轮，超功率时优先降驱动轮功率
-    pwr_groups[0].nodes = drive_nodes;
-    pwr_groups[0].node_count = 4;
 
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
@@ -227,7 +215,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
     //         cap_board_limit = 75.0f;//
     //         final_limit = 75.0f;
     //     }
-    //     Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 2);
     //
     //     for(int i=0; i<4; i++) {
     //         chassis_ctrl.Drive_S[i].Output = m_states[i].limited_cmd;
