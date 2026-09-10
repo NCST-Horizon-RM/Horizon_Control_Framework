@@ -26,7 +26,7 @@
 #define MOUSE_PITCH_COEF       0.06f
 #define MOUSE_YAW_COEF         0.04f
 
-#define YAW_ZERO               1190
+#define YAW_ZERO               1100
 
 // --- 本地静态内存缓存 ---
 

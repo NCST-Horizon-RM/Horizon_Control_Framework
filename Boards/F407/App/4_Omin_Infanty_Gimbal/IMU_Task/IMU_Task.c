@@ -245,9 +245,9 @@ void IMU_Update_Task(IMU_Data_t *IMU,float dt_s)
             System_State_Report(ID_IMU,STATUS_RUN);
             //旋转矩阵切换
             const float AXIS_MAP[3][3] = {
-                {1.0f, 0.0f, 0.0f}, // Logical X = + Physical X
-                {0.0f, 1.0f, 0.0f}, // Logical Y = + Physical Y
-                {0.0f, 0.0f, 1.0f}  // Logical Z = + Physical Z
+                {0.0f, -1.0f, 0.0f}, // Logical X = + Physical X
+                {0.0f, 0.0f, 1.0f}, // Logical Y = + Physical Y
+                {-1.0f, 0.0f, 0.0f}  // Logical Z = + Physical Z
             };
             float gyro_phy[3];
             float accel_phy[3];

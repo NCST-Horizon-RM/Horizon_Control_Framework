@@ -3,6 +3,7 @@
 //
 #include "Chassis_Ctrl.h"
 #include "All_define.h"
+#include "Chassis_ESKF.h"
 #include "Comm_DualBoard.h"
 #include "Robot_Config.h"
 #include "Power_CAP.h"
@@ -10,14 +11,13 @@
 #include "Referee.h"
 #include "System_State.h"
 #include "Robot_Cmd.h"
+#include "Vofa.h"
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
-
+static Chassis_ESKF_t chassis_eskf;
+Chassis_ESKF_Output_t eskf_out = {0};
 //功率控制
 static Power_Ctrl_t chassis_model;
-static Motor_Power_State_t m_states[4];//底盘共8个电机
-static Power_Node_t drive_nodes[4]; // 用于驱动电机
-static Power_Group_t pwr_groups[1];//两个电机组
 
 static float Chassis_Power_Arbitrator(float base_power_limit,
                                       float cur_buffer,
@@ -71,13 +71,14 @@ uint8_t Chassis_Init(Chassis_Cfg_t *cfg, Chassis_Type_e type)
 uint8_t Chassis_Control_Init(void)
 {
     Chassis_Init(&chassis_ctrl.Chassis_Config,SWERVE);
+    Chassis_ESKF_Init(&chassis_eskf);
 
     float PID_V_Param[3] = {8.0f, 0.0f, 0.0f};
     PID_Init(&chassis_ctrl.PID_Vx, 8.0f, 5.0f, PID_V_Param,0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     PID_Init(&chassis_ctrl.PID_Vy, 8.0f, 5.0f, PID_V_Param,0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
 
-    float PID_Vw_Param[3] = {8.0f, 0.0f, 0.0f};
-    PID_Init(&chassis_ctrl.PID_Vw, 8.0f, 8.0f, PID_Vw_Param,0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
+    float PID_Vw_Param[3] = {15.0f, 0.0f, 0.0f};
+    PID_Init(&chassis_ctrl.PID_Vw, 18.0f, 8.0f, PID_Vw_Param,0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
 
     float PID_6020_Pos[3] = {500.0f, 0.0f, 0.0f};
     float PID_6020_Spd[3] = {85.0f,  0.0f, 0.0f};
@@ -92,15 +93,6 @@ uint8_t Chassis_Control_Init(void)
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
         }
     Power_Ctrl_Init(&chassis_model);
-    for(int i=0; i<4; i++) {
-        // 配置驱动轮节点 (绑定 3508 模型)
-        drive_nodes[i].state = &m_states[i];
-        drive_nodes[i].model = &MODEL_M3508;
-    }
-    // 配置优先级：
-    // groups[0]: 低优先级，驱动轮，超功率时优先降驱动轮功率
-    pwr_groups[0].nodes = drive_nodes;
-    pwr_groups[0].node_count = 4;
 
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
@@ -110,7 +102,7 @@ uint8_t Chassis_Control_Init(void)
 /**
  * @brief 底盘控制任务
  */
-void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt)
+void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t *imu, float dt)
 {
     if (c_motor == NULL) {
         System_State_Report(ID_CHASSIS, STATUS_ERROR);
@@ -140,20 +132,46 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt)
     else
     {
         for (int i = 0; i < 4; i++) {
-            chassis_ctrl.Chassis_Feedback.steer_angle[i] = (float)c_motor->DJI_6020_Steer[i].Angle_Infinite * ENCODER_TO_RAD;
-            chassis_ctrl.Chassis_Feedback.steer_rpm[i]       = (float)c_motor->DJI_6020_Steer[i].Speed_now;
-            chassis_ctrl.Chassis_Feedback.wheel_rpm[i]       = (float)c_motor->DJI_3508_Chassis[i].Speed_now;
+            chassis_ctrl.chassis_feedback.steer_angle[i] = (float)c_motor->DJI_6020_Steer[i].Angle_Infinite * ENCODER_TO_RAD;
+            chassis_ctrl.chassis_feedback.steer_rpm[i]       = (float)c_motor->DJI_6020_Steer[i].Speed_now;
+            chassis_ctrl.chassis_feedback.wheel_rpm[i]       = (float)c_motor->DJI_3508_Chassis[i].Speed_now;
         }
 
-        Chassis_Forward(&chassis_ctrl.Chassis_Config,&chassis_ctrl.Chassis_Feedback);
+        Chassis_Forward(&chassis_ctrl.Chassis_Config,&chassis_ctrl.chassis_feedback);
+
+        if (imu != NULL && imu_ctrl_flag.fusion_enabled)
+        {
+            Chassis_ESKF_Input_t eskf_in = {
+                .dt = dt,
+                .wheel_vx = chassis_ctrl.chassis_feedback.vx,
+                .wheel_vy = chassis_ctrl.chassis_feedback.vy,
+                .wheel_vw = chassis_ctrl.chassis_feedback.vw,
+                .wheel_valid = Is_Group_Online(CHASSIS) ? 1 : 0,
+                .imu_gx = imu->gyro[0],
+                .imu_gy = imu->gyro[1],
+                .imu_gz = imu->gyro[2],
+                .imu_ax = imu->accel[0],
+                .imu_ay = imu->accel[1],
+                .imu_az = imu->accel[2],
+                .roll = imu->roll * DEG2RAD,
+                .pitch = imu->pitch * DEG2RAD,
+                .attitude_valid = 1,
+            };
+            Chassis_ESKF_Update(&chassis_eskf, &eskf_in, &eskf_out);
+            VOFA_JustFloat(&huart1,9,chassis_ctrl.chassis_feedback.vx,chassis_ctrl.chassis_feedback.vy,chassis_ctrl.chassis_feedback.vw,
+            eskf_out.vx, eskf_out.vy, eskf_out.vw,imu->accel[0],imu->accel[1],imu->accel[2]);
+            chassis_ctrl.chassis_feedback.vx = eskf_out.vx;
+            chassis_ctrl.chassis_feedback.vy = eskf_out.vy;
+            chassis_ctrl.chassis_feedback.vw = eskf_out.vw;
+        }
 
         float vx_tar = chassis_cmd.target_vx;
         float vy_tar = chassis_cmd.target_vy;
         float vw_tar = chassis_cmd.target_vw;
 
-        PID_Calculate(&chassis_ctrl.PID_Vx, chassis_ctrl.Chassis_Feedback.vx, vx_tar);
-        PID_Calculate(&chassis_ctrl.PID_Vy, chassis_ctrl.Chassis_Feedback.vy, vy_tar);
-        PID_Calculate(&chassis_ctrl.PID_Vw, chassis_ctrl.Chassis_Feedback.vw, vw_tar);
+        PID_Calculate(&chassis_ctrl.PID_Vx, chassis_ctrl.chassis_feedback.vx, vx_tar);
+        PID_Calculate(&chassis_ctrl.PID_Vy, chassis_ctrl.chassis_feedback.vy, vy_tar);
+        PID_Calculate(&chassis_ctrl.PID_Vw, chassis_ctrl.chassis_feedback.vw, vw_tar);
 
         /* 速度定舵向 + 加速度力矩前馈（力速混控） */
         Chassis_Mixed_Control(&chassis_ctrl.Chassis_Config,
@@ -161,17 +179,17 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt)
                               chassis_ctrl.PID_Vx.Output,
                               chassis_ctrl.PID_Vy.Output,
                               chassis_ctrl.PID_Vw.Output,
-                              &chassis_ctrl.Chassis_Feedback,
+                              &chassis_ctrl.chassis_feedback,
                               &chassis_ctrl.Chassis_Command);
 
         for (int i = 0; i < 4; i++)
         {
             PID_Calculate(&chassis_ctrl.Steer_P[i],
-                          chassis_ctrl.Chassis_Feedback.steer_angle[i],
+                          chassis_ctrl.chassis_feedback.steer_angle[i],
                           chassis_ctrl.Chassis_Command.steer_angle_target[i]);
 
             PID_Calculate(&chassis_ctrl.Steer_S[i],
-                          chassis_ctrl.Chassis_Feedback.steer_rpm[i],
+                          chassis_ctrl.chassis_feedback.steer_rpm[i],
                           chassis_ctrl.Steer_P[i].Output);
         }
 
@@ -197,7 +215,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt)
     //         cap_board_limit = 75.0f;//
     //         final_limit = 75.0f;
     //     }
-    //     Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 2);
     //
     //     for(int i=0; i<4; i++) {
     //         chassis_ctrl.Drive_S[i].Output = m_states[i].limited_cmd;

@@ -14,35 +14,72 @@ typedef union {
 } Float_Byte_t;
 
 /**
- * @brief  视觉接收数据解析 (Decode)
- * @param  rx_buf:    串口接收到的原始数据缓冲区
+ * @brief  视觉接收数据解析 (Decode) —— 支持包头包尾环形错位自动拼接
+ * @param  rx_buf:    串口接收到的原始数据缓冲区（长度必须为 VISION_RECV_LEN）
  * @param  recv_data: 解析后存储的结构体指针
- * @retval true:      解析成功 / false: 校验失败
+ * @retval true:      解析成功 / false: 校验失败或找不到合法帧边界
  */
 bool Vision_Decode(uint8_t *rx_buf, Vision_Recv_t *recv_data)
 {
-    recv_data->offline.last_feed_tick = HAL_GetTick();
     if (rx_buf == NULL || recv_data == NULL) return false;
-    // 校验帧头和帧尾
-    if (rx_buf[0] != VISION_SOF || rx_buf[VISION_RECV_LEN - 1] != VISION_EOF) {
-        return false;
+    recv_data->offline.last_feed_tick = HAL_GetTick();
+
+    const uint8_t  SOF = VISION_SOF;
+    const uint8_t  EOF = VISION_EOF;
+    const uint16_t LEN = VISION_RECV_LEN;
+
+    uint8_t *p = rx_buf;                    // 最终指向用于解析的缓冲区
+    uint8_t  temp_buf[VISION_RECV_LEN];     // 旋转拼接用的临时空间
+    /* ---------- 1. 先检查是否已经是标准对齐帧 ---------- */
+    if (rx_buf[0] == SOF && rx_buf[LEN - 1] == EOF) {
+        // 已经对齐，p 继续指向 rx_buf，无需拼接
     }
+    else {
+        /* ---------- 2. 环形查找 "DC 后面紧跟 CD" 的边界 ---------- */
+        bool frame_found = false;
+        int  offset = 0;    // 真正的包头 SOF 在 rx_buf 中的索引
+
+        for (int i = 0; i < LEN; i++) {
+            int next = (i + 1) % LEN;   // 环形后一字节
+            // 必须成对判断：当前是包尾 DC，下一位是包头 CD
+            if (rx_buf[i] == EOF && rx_buf[next] == SOF) {
+                offset = next;          // 包头所在位置
+                frame_found = true;
+                break;
+            }
+        }
+
+        if (!frame_found) {
+            return false;   // 找不到合法的包头包尾边界，直接丢弃
+        }
+
+        /* ---------- 3. 按 offset 旋转，重新拼接成标准帧 ---------- */
+        for (int i = 0; i < LEN; i++) {
+            temp_buf[i] = rx_buf[(offset + i) % LEN];
+        }
+        p = temp_buf;       // 后续统一用 p 解析
+        /* 二次确认拼接后的头尾 */
+        if (p[0] != SOF || p[LEN - 1] != EOF) {
+            return false;
+        }
+    }
+    /* ---------- 4. 统一解析（无论 p 指向 rx_buf 还是 temp_buf） ---------- */
     Float_Byte_t f_cvt;
     // 解析 Pitch
-    memcpy(f_cvt.buf, &rx_buf[1], 4);
+    memcpy(f_cvt.buf, &p[1], 4);
     recv_data->pitch = f_cvt.f;
     // 解析 Yaw
-    memcpy(f_cvt.buf, &rx_buf[5], 4);
+    memcpy(f_cvt.buf, &p[5], 4);
     recv_data->yaw = f_cvt.f;
-    // 解析 状态位
-    recv_data->target_found = (rx_buf[9] & 0x10) >> 4;
-    recv_data->fire_command = (rx_buf[9] & 0x08) >> 3;
-    recv_data->state        = (rx_buf[9] & 0x07);
-    // 解析 Pitch 规划值
-    memcpy(f_cvt.buf, &rx_buf[10], 4);
+    // 解析状态位
+    recv_data->target_found = (p[9] & 0x10) >> 4;
+    recv_data->fire_command = (p[9] & 0x08) >> 3;
+    recv_data->state        = (p[9] & 0x07);
+    // 解析 Pitch 速度前馈
+    memcpy(f_cvt.buf, &p[10], 4);
     recv_data->pitch_plan = f_cvt.f * DEG2RAD;
-    // 解析 Yaw 规划值
-    memcpy(f_cvt.buf, &rx_buf[14], 4);
+    // 解析 Yaw 速度前馈
+    memcpy(f_cvt.buf, &p[14], 4);
     recv_data->yaw_plan = f_cvt.f * DEG2RAD;
     return true;
 }

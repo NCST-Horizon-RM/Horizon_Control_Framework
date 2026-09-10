@@ -77,14 +77,14 @@ static void Mecanum_Forward(const Chassis_Cfg_t *c, const float *v,
 static void Omni_Forward(const Chassis_Cfg_t *c, const float *v,
                          float *vx, float *vy, float *vw)
 {
-    /* R = 轮心到质心距离，四轮等距；电机正方向 = 各轮顺时针切向。
-     * 全向底盘实测 X/Y 平移与默认约定反向、yaw 方向不变，
-     * 因此 vx/vy 的投影系数取反，vw 系数保持不变。 */
+    /* R = 轮心到质心距离，四轮等距。
+     * 全向底盘的 X / Y 平移已按右手系对齐，yaw 也应满足右手系；
+     * 这里直接使用统一的右手系旋转符号。 */
     float Lx = c->Lx, Ly = c->Ly;
     float R  = sqrtf(Lx * Lx + Ly * Ly);
     float k_vx = -R / (4.0f * Ly * Ly);
     float k_vy =  R / (4.0f * Lx * Lx);
-    float k_vw = -1.0f / (4.0f * R);
+    float k_vw =  1.0f / (4.0f * R);
 
     float s_py = 0.0f, s_px = 0.0f, s_v = 0.0f;
     for (int i = 0; i < 4; i++) {
@@ -154,15 +154,14 @@ static void Mecanum_Inverse(const Chassis_Cfg_t *c, float vx, float vy, float vw
 static void Omni_Inverse(const Chassis_Cfg_t *c, float vx, float vy, float vw,
                          Chassis_Command_t *cmd)
 {
-    /* v_i = (-py·vx + px·vy)/R - vw·R
-     * 实测平移 X/Y 与默认约定相反而 yaw 正确，
-     * 故对平移项取反，保留 -vw·R。 */
+    /* v_i = (-py·vx + px·vy)/R + vw·R
+     * 平移项沿用右手系，yaw 也按右手系正方向输出。 */
     float Lx = c->Lx, Ly = c->Ly;
     float R  = sqrtf(Lx * Lx + Ly * Ly);
     for (int i = 0; i < 4; i++) {
         float px = POS_X_SIGN[i] * Lx;
         float py = POS_Y_SIGN[i] * Ly;
-        float v = (-py * vx + px * vy) / R - vw * R;
+        float v = (-py * vx + px * vy) / R + vw * R;
         cmd->wheel_rpm_target[i] = Surface_Speed_To_Rpm(c, v);
     }
 }
@@ -224,13 +223,13 @@ static void Mecanum_Force(const Chassis_Cfg_t *c, float fx, float fy, float mz,
 static void Omni_Force(const Chassis_Cfg_t *c, float fx, float fy, float mz,
                        float *torque_raw)
 {
-    /* 力分配 = 速度雅可比的对偶，平移项与 Omni_Inverse 同步取反：
-     * f_i = -py·R·fx/(4Ly²) + px·R·fy/(4Lx²) - mz/(4R) */
+    /* 力分配 = 速度雅可比的对偶，平移项保持右手系，yaw 力矩同向分配：
+     * f_i = -py·R·fx/(4Ly²) + px·R·fy/(4Lx²) + mz/(4R) */
     float Lx = c->Lx, Ly = c->Ly;
     float R  = sqrtf(Lx * Lx + Ly * Ly);
     float k_fx = -R / (4.0f * Ly * Ly);
     float k_fy =  R / (4.0f * Lx * Lx);
-    float k_mz = -1.0f / (4.0f * R);
+    float k_mz =  1.0f / (4.0f * R);
 
     for (int i = 0; i < 4; i++) {
         float px = POS_X_SIGN[i] * Lx;

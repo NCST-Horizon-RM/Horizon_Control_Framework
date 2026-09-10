@@ -44,6 +44,87 @@ static uint16_t imu_pid_cnt      = 0;//PID控制计数器，用于10ms分频执�
 static uint16_t gyro_calib_cnt   = 0;//陀螺仪校准计数
 static float heater_pwm_out   = 0;// 当前加热片PWM输出值
 static IMU_Fusion_Algo_e current_fusion_algo = VQF;
+//IMU加速度计偏心补偿
+static const float LEVER_ARM_OFFSET[3] = {0.177f, -0.002f, 0.0f};//IMU 相对旋转中心的偏移量（单位：米）
+// 角加速度低通系数（0~1），越小越平滑，越大响应越快
+#define LEVER_ARM_ALPHA_LPF     0.25f
+// 加速度单位转换系数
+#define LEVER_ARM_ACCEL_FACTOR  1.0f
+// 偏心补偿内部状态
+static float lever_gyro_prev[3] = {0.0f, 0.0f, 0.0f};
+static float lever_alpha_lpf[3] = {0.0f, 0.0f, 0.0f};
+static uint8_t lever_arm_initialized = 0;
+
+/**
+ * @brief 三维矢量叉乘
+ */
+static inline void Vec3_Cross(const float a[3], const float b[3], float out[3])
+{
+    out[0] = a[1] * b[2] - a[2] * b[1];
+    out[1] = a[2] * b[0] - a[0] * b[2];
+    out[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+/**
+ * @brief IMU 加速度偏心补偿（Lever Arm Effect Compensation）
+ * @note  补偿 IMU 因偏离旋转中心而引入的向心/切向伪加速度
+ *        公式：a_comp = alpha × r + omega × (omega × r)
+ *        必须在轴映射完成后、姿态解算前调用
+ * @param IMU  IMU数据结构体指针（要求 gyro 单位为 rad/s）
+ * @param dt   采样周期(s)
+ */
+#define GYRO_HIST_LEN 8   // 窗口长度，噪声抑制约 2.8 倍
+
+static float gyro_hist[3][GYRO_HIST_LEN];
+static float gyro_ma_prev[3] = {0};  // 上一周期的滑动平均
+static uint8_t hist_idx = 0;
+static uint8_t hist_filled = 0;
+
+static void IMU_Accel_LeverArm_Compensate(IMU_Data_t *IMU, float dt)
+{
+    if (dt < 1e-6f) dt = 0.001f;
+
+    // ---------- 1. 滑动平均 ----------
+    for (int i = 0; i < 3; i++) {
+        gyro_hist[i][hist_idx] = IMU->gyro[i];
+    }
+    hist_idx = (hist_idx + 1) % GYRO_HIST_LEN;
+    if (!hist_filled && hist_idx == 0) hist_filled = 1;
+
+    uint8_t len = hist_filled ? GYRO_HIST_LEN : hist_idx;
+    if (len < 2) return;  // 数据不够，暂不补偿
+
+    float gyro_ma[3] = {0};
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < len; j++) {
+            gyro_ma[i] += gyro_hist[i][j];
+        }
+        gyro_ma[i] /= (float)len;
+    }
+
+    // ---------- 2. 对滑动平均值差分（噪声小得多）----------
+    float alpha[3];
+    for (int i = 0; i < 3; i++) {
+        alpha[i] = (gyro_ma[i] - gyro_ma_prev[i]) / dt;
+        gyro_ma_prev[i] = gyro_ma[i];
+    }
+
+    // ---------- 3. 向心项 ----------
+    float omega_cross_r[3];
+    Vec3_Cross(IMU->gyro, LEVER_ARM_OFFSET, omega_cross_r);
+
+    float centripetal[3];
+    Vec3_Cross(IMU->gyro, omega_cross_r, centripetal);
+
+    // ---------- 4. 切向项 ----------
+    float tangential[3];
+    Vec3_Cross(alpha, LEVER_ARM_OFFSET, tangential);
+
+    // ---------- 5. 应用补偿 ----------
+    IMU->accel[0] -= (centripetal[0] + tangential[0]);
+    IMU->accel[1] -= (centripetal[1] + tangential[1]);
+    IMU->accel[2] -= (centripetal[2] + tangential[2]);
+}
 /**
  * @brief 设置加热片PWM输出
  * @param pwm 目标PWM值 (0.0f - HEATER_PWM_MAX)
@@ -112,6 +193,7 @@ void IMU_Update_Task(IMU_Data_t *IMU,float dt_s)
     {
         case TEMP_INIT:
             IMU_Temp_Control_Init();
+            lever_arm_initialized = 0;
             //姿态滤波算法初始化，目前有三种算法，VQF、Mahony、EKF
             //VQF姿态解算，Yaw漂移较低，，p/r收敛速度大于EKF慢于Mahony，抗扰能力较强，综合效果最好，建议用这个
             //Mahony姿态解算，Yaw漂移较低，p/r收敛速度最快，但是抗扰能力差，波形噪声大
@@ -121,6 +203,7 @@ void IMU_Update_Task(IMU_Data_t *IMU,float dt_s)
 #ifdef DEBUG_MODE
             //DEBUG模式，不跳过状态
             imu_ctrl_state = TEMP_PID_CTRL;
+            imu_ctrl_state = GYRO_CALIB;
 #endif
 #ifdef RELEASE_MODE
             //Release模式，直接跳到零漂校准，节省时间
@@ -182,13 +265,14 @@ void IMU_Update_Task(IMU_Data_t *IMU,float dt_s)
                     IMU->accel[i] += AXIS_MAP[i][j] * accel_phy[j];
                 }
             }
-
+            // 偏心补偿
+            IMU_Accel_LeverArm_Compensate(IMU, dt_s);
             IMU_Fusion_Update(IMU, dt_s);
             //发布IMU数据
             imu_ctrl_flag.fusion_enabled = 1;
             break;
         case ERROR_STATE:
-            System_State_Report(ID_IMU,STATUS_ERROR);
+            //System_State_Report(ID_IMU,STATUS_ERROR);
             if (BMI088_Init() == 1) // 尝试重新初始化IMU，成功则认为错误已恢复
             {
                 imu_ctrl_state = TEMP_INIT; // 成功则回到初始状态

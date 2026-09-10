@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 #include "Robot_Config.h"
-#include "Chassis_Calc.h"
 #include "Chassis_Kinematics.h"
 #include "IMU_Task.h"
 
@@ -18,12 +17,12 @@ typedef struct {
     PID_t PID_Vy;
     PID_t PID_Vw;
     Chassis_Cfg_t Chassis_Config;
-    Chassis_Feedback_t Chassis_Feedback;
+    Chassis_Feedback_t chassis_feedback;
     Chassis_Command_t Chassis_Command;
 
 } Chassis_Ctrl_Block_t;
 
 uint8_t Chassis_Control_Init(void);
-void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, float dt);
+void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t *imu, float dt);
 
 #endif //H7_FRAMEWORK_CHASSIS_CTRL_H

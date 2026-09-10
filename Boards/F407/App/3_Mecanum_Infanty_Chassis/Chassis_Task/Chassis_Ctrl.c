@@ -9,13 +9,14 @@
 #include "Referee.h"
 #include "System_State.h"
 #include "Robot_Cmd.h"
+#include "Vofa.h"
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
 //功率控制
 static Power_Ctrl_t chassis_model;
 static Motor_Power_State_t m_states[4];//底盘共4个电机
-static Power_Node_t drive_nodes[4]; // 用于驱动电机
-static Power_Group_t pwr_groups[1];//一个电机组
+static Power_Motion_Node_t motion_nodes[4];
+static Power_Motion_Result_t chassis_power_result;
 
 static float Chassis_Power_Arbitrator(float base_power_limit,
                                       float cur_buffer,
@@ -56,15 +57,40 @@ static float Ramp_Calc(float target, float current, float acc_step, float dec_st
     return current;
 }
 
-uint8_t Mecanum_Init(mecanumInit_typdef *mecanumInitT)
+uint8_t Chassis_Init(Chassis_Cfg_t *cfg, Chassis_Type_e type)
 {
-    mecanumInitT->wheel_r = 0.076f;
-    mecanumInitT->half_wheelbase = 0.169f;   // 前后轮中心距的一半 (Lx)
-    mecanumInitT->half_track_width = 0.169f; // 左右轮中心距的一半 (Ly)
-    mecanumInitT->deceleration_ratio = 3591.0f / 187.0f;
+    if (cfg == NULL) return 1;
+
+    cfg->type = type;
+    cfg->mass = 18.5f;
+    cfg->inertia = 2.0f;
+    cfg->torque_to_raw = (1.0f / (19.2f * 0.0157f * 0.85f)) * (16384.0f / 20.0f);
+    for (int i = 0; i < 4; i++) cfg->steer_offset[i] = 0.0f;
+
+    switch (type) {
+        case MECANUM:
+            cfg->wheel_r = 0.075f;
+            cfg->Lx = 0.17f;
+            cfg->Ly = 0.17f;
+            cfg->gear_ratio = 3591.0f / 187.0f;
+            break;
+        case OMNI:
+            cfg->wheel_r = 0.075f;
+            cfg->Lx = 0.25f;
+            cfg->Ly = 0.25f;
+            cfg->gear_ratio = 3591.0f / 187.0f;
+            break;
+        case SWERVE:
+            cfg->wheel_r = 0.06f;
+            cfg->Lx = 0.24f;
+            cfg->Ly = 0.24f;
+            cfg->gear_ratio = 15.76f;
+            break;
+        default:
+            return 1;
+    }
     return 0;
 }
-
 /**
  * @brief 底盘控制初始化
  * @param MOTOR 底盘电机总结构体指针
@@ -73,7 +99,7 @@ uint8_t Mecanum_Init(mecanumInit_typdef *mecanumInitT)
 uint8_t Chassis_Control_Init(void)
 {
     //底盘初始化
-    Chassis_Init(&chassis_ctrl.chassis_cfg,chassis_ctrl.chassis_cfg.type);
+    Chassis_Init(&chassis_ctrl.chassis_cfg,0);
 
     float PID_vx[3] = {9.0f,   0.0f,  0.0f};
     PID_Init(&chassis_ctrl.vx, 15.0f, 0.0f, PID_vx,
@@ -81,26 +107,24 @@ uint8_t Chassis_Control_Init(void)
     float PID_vy[3] = {9.0f,   0.0f,  0.0f};
     PID_Init(&chassis_ctrl.vy, 15.0f, 0.0f, PID_vy,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_vw[3] = {9.0f,   0.0f,  0.0f};
+    float PID_vw[3] = {12.0f,   0.0f,  0.0f};
     PID_Init(&chassis_ctrl.vw, 18.0f, 0.0f, PID_vw,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     // 底盘跟随PID初始化
     float PID_Follow_Pos[3] = {18.0f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Pos, 15.0f, 0.0f, PID_Follow_Pos,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-
-    float PID_Follow_Spd[3] = {1.5f,   0.0f,   0.0f};
+    float PID_Follow_Spd[3] = {2.0f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Spd, 15.0f, 1.0f, PID_Follow_Spd,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     // 功率控制初始化及参数配置
     Power_Ctrl_Init(&chassis_model);
     for(int i=0; i<4; i++) {
         // 配置驱动轮节点，3508 功率模型
-        drive_nodes[i].state = &m_states[i];
-        drive_nodes[i].model = &MODEL_M3508;
+        motion_nodes[i].motor.state = &m_states[i];
+        motion_nodes[i].motor.model = &MODEL_M3508;
+        motion_nodes[i].max_cmd = 16000.0f;
     }
-    pwr_groups[0].nodes = drive_nodes;
-    pwr_groups[0].node_count = 4;
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
     return 1;
@@ -130,9 +154,9 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
     if (chassis_cmd.mode == CHASSIS_CMD_SAFE || is_system_locked)
     {
         // 清空PID
-        for (int i = 0; i < 4; i++) {
-            PID_Clear(&chassis_ctrl.Drive_S[i]);
-        }
+        PID_Clear(&chassis_ctrl.vx);
+        PID_Clear(&chassis_ctrl.vy);
+        PID_Clear(&chassis_ctrl.vw);
         PID_Clear(&chassis_ctrl.Follow_Pos);
         PID_Clear(&chassis_ctrl.Follow_Spd);
         // 清空斜坡函数
@@ -142,11 +166,19 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
     }
     else
     {
+
+        for (int i = 0; i < 4; i++)
+        {
+            chassis_ctrl.chassis_feedback.wheel_rpm[i] = c_motor->DJI_3508_Chassis[i].Speed_now;
+        }
+        Chassis_Forward(&chassis_ctrl.chassis_cfg,&chassis_ctrl.chassis_feedback);
+
+
         float vw_tar = chassis_cmd.target_vw;
         // 底盘跟随模式下，计算底盘跟随PID
         if (chassis_cmd.mode == CHASSIS_CMD_FOLLOW) {
             PID_Calculate(&chassis_ctrl.Follow_Pos, chassis_cmd.offset_angle, 0.0f);
-            vw_tar = PID_Calculate(&chassis_ctrl.Follow_Spd, imu->gyro[2], chassis_ctrl.Follow_Pos.Output);
+            vw_tar = PID_Calculate(&chassis_ctrl.Follow_Spd, chassis_ctrl.chassis_feedback.vw, chassis_ctrl.Follow_Pos.Output);
         }
         // 非对称梯形加减速
         cur_vx_gimbal = Ramp_Calc(chassis_cmd.target_vx, cur_vx_gimbal, 5.0f, 100.0f,dt);
@@ -157,12 +189,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
         float sin_theta = arm_sin_f32(chassis_cmd.offset_angle);
         float cur_vx_chassis = cur_vx_gimbal * cos_theta + cur_vy_gimbal * sin_theta;
         float cur_vy_chassis = cur_vy_gimbal * cos_theta - cur_vx_gimbal * sin_theta;
-
-        for (int i = 0; i < 4; i++)
-        {
-            chassis_ctrl.chassis_feedback.wheel_rpm[i] = c_motor->DJI_3508_Chassis[i].Speed_now;
-        }
-        Chassis_Forward(&chassis_ctrl.chassis_cfg,&chassis_ctrl.chassis_feedback);
 
         PID_Calculate(&chassis_ctrl.vx, chassis_ctrl.chassis_feedback.vx, cur_vx_chassis);
         PID_Calculate(&chassis_ctrl.vy, chassis_ctrl.chassis_feedback.vy, cur_vy_chassis);
@@ -190,7 +216,13 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
             cap_board_limit = 45.0f;//
             final_limit = 75.0f;
         }
-        Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 1);
+        /* 此底盘尚未拆分运动电流，将原始合成请求作为单一分量统一缩放。 */
+        for (uint8_t wheel_index = 0; wheel_index < 4; wheel_index++) {
+            motion_nodes[wheel_index].translation_cmd = m_states[wheel_index].original_cmd;
+            motion_nodes[wheel_index].rotation_cmd = 0.0f;
+        }
+        if (final_limit < 0.0f) final_limit = 0.0f;
+        Power_Ctrl_Allocate_Motion(&chassis_model, final_limit, motion_nodes, 4, &chassis_power_result);
         for(int i = 0; i < 4; i++) {
             chassis_ctrl.chassis_command.wheel_torque_raw[i] = m_states[i].limited_cmd;
         }
@@ -211,6 +243,8 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
                        (int16_t)chassis_ctrl.chassis_command.wheel_torque_raw[2],
                        (int16_t)chassis_ctrl.chassis_command.wheel_torque_raw[3]);
     }
+
+    VOFA_JustFloat(&huart6,2,IMU_Data.gyro[2],chassis_ctrl.chassis_feedback.vw);
 }
 
 // 超级电容与缓冲能量调参宏定义

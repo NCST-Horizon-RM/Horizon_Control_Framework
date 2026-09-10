@@ -24,14 +24,14 @@ uint8_t Gimbal_Control_Init(void)
     float PID_Pitch_P[3] = {0.5f,   0.0f,  0.0f};
         PID_Init(&gimbal_ctrl.Pitch_P, 50.0f, 30.0f, PID_Pitch_P,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_Pitch_S[3] = {-5.0f,   -0.02f,   0.0f};
+    float PID_Pitch_S[3] = {5.0f,   0.02f,   0.0f};
     PID_Init(&gimbal_ctrl.Pitch_S, 30.0f, 5.0f, PID_Pitch_S,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     //Yaw PID参数初始化
     float PID_Yaw_P[3] = {0.4f,   0.0f,  0.0f};
     PID_Init(&gimbal_ctrl.Yaw_P, 20.0f, 5.0f, PID_Yaw_P,
         0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_Yaw_S[3] = {-6.2f,   -0.02f,   0.0f};
+    float PID_Yaw_S[3] = {6.2f,   0.02f,   0.0f};
     PID_Init(&gimbal_ctrl.Yaw_S, 30.0f, 3.0f, PID_Yaw_S,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     //向系统下发底盘当前状态，准备中
@@ -61,13 +61,10 @@ void Gimbal_Control_Task(const Gimbal_Motor_Group_t *g_motor,const IMU_Data_t *g
     if (gimbal_cmd.mode == GIMBAL_CMD_SAFE || is_system_locked)
     {
         // 清空PID
-        for (int i = 0; i < 4; i++) {
-            PID_Clear(&gimbal_ctrl.Pitch_P);
-            PID_Clear(&gimbal_ctrl.Pitch_S);
-            PID_Clear(&gimbal_ctrl.Yaw_P );
-            PID_Clear(&gimbal_ctrl.Yaw_S );
-
-        }
+        PID_Clear(&gimbal_ctrl.Pitch_P);
+        PID_Clear(&gimbal_ctrl.Pitch_S);
+        PID_Clear(&gimbal_ctrl.Yaw_P );
+        PID_Clear(&gimbal_ctrl.Yaw_S );
     }
     else
     {

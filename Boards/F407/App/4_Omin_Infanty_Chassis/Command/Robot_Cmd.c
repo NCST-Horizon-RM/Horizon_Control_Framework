@@ -26,7 +26,7 @@
 #define MOUSE_PITCH_COEF       0.06f
 #define MOUSE_YAW_COEF         0.04f
 
-#define YAW_ZERO               1190
+#define YAW_ZERO               340
 
 // --- 本地静态内存缓存 ---
 
@@ -50,7 +50,7 @@ void Robot_Cmd_Init(void)
 void Robot_Cmd_Update(void)
 {
 
-    System_State_Report_Remote(DBUS.offline.is_online);//向系统状态模块传入遥控器在线状态
+    System_State_Report_Remote(g2c.romoteOnLine);//向系统状态模块传入遥控器在线状态
 
     if (sys_state.global_mode == GLOBAL_SAFE_LOCK ||
         sys_state.global_mode == GLOBAL_MODULE_ERROR ||
@@ -90,10 +90,14 @@ static void Cmd_Update_Remote_Ctrl(void)
     int16_t relative_angle = YAW_ZERO - gimbal_motors.DM4310_Yaw.Angle_now;
     chassis_cmd.offset_angle = normalize_to_pi((float)relative_angle * ENCODER_TO_RAD);;
 
-    chassis_cmd.target_vx = (float)DBUS.Remote.CH1 * RC_ROCKER_XY_COEF;
-    chassis_cmd.target_vy = -(float)DBUS.Remote.CH0 * RC_ROCKER_XY_COEF;
-    chassis_cmd.target_vw =(float)(DBUS.Remote.Dial+DBUS.Remote.CH2) * RC_ROCKER_VW_COEF;
-    chassis_cmd.mode = CHASSIS_CMD_FREE;
+    chassis_cmd.target_vx = (float)g2c.vx * 0.01f;
+    chassis_cmd.target_vy = (float)g2c.vy * 0.01f;
+    chassis_cmd.mode = CHASSIS_CMD_FOLLOW;
+    if (g2c.vr != 0) {
+        chassis_cmd.mode = CHASSIS_CMD_SPIN;
+        chassis_cmd.target_vw = (float)g2c.vr * 0.01f;
+    }
+    chassis_cmd.is_cap_on = true;
 }
 
 /**
@@ -123,7 +127,17 @@ static void Cmd_Update_Mouse_Key(void)
  */
 static void Cmd_DualBoard_Sync(void)
 {
+    c2g.heat_last  = Referee.power_heat_data.shooter_17mm_barrel_heat;
+    c2g.cooling    = Referee.robot_status.shooter_barrel_cooling_value;
+    c2g.level      = Referee.robot_status.robot_level;
+    c2g.initial_s  = (uint8_t)roundf(Referee.shoot_data.initial_speed * 10);
+    c2g.robot_HP   = Referee.robot_status.current_HP;
+    c2g.heat_large = Referee.robot_status.shooter_barrel_heat_limit;
+    c2g.self_color = (Referee.robot_status.robot_id == 103) ? 1 : 0;
 
+    uint8_t buf[8];
+    C2G_pack(&c2g, buf);
+    CAN_Send_Msg(&hcan1, 0x232, buf, 8);
 }
 
 /**

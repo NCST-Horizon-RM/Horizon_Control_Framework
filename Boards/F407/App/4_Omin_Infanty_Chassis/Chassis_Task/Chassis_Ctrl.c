@@ -2,6 +2,8 @@
 // Created by CaoKangqi on 2026/6/20.
 //
 #include "Chassis_Ctrl.h"
+
+#include "All_define.h"
 #include "Comm_DualBoard.h"
 #include "Robot_Config.h"
 #include "Power_CAP.h"
@@ -9,13 +11,18 @@
 #include "Referee.h"
 #include "System_State.h"
 #include "Robot_Cmd.h"
+#include "Chassis_ESKF.h"
+#include "Vofa.h"
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
+static Chassis_ESKF_t chassis_eskf;
+Chassis_ESKF_Output_t eskf_out = {0};
 //功率控制
 static Power_Ctrl_t chassis_model;
 static Motor_Power_State_t m_states[4];//底盘共4个电机
-static Power_Node_t drive_nodes[4]; // 用于驱动电机
-static Power_Group_t pwr_groups[1];//一个电机组
+
+static Power_Motion_Node_t motion_nodes[4];          /**< 四轮模型、运动电流分量及电流上限。 */
+static Power_Motion_Result_t chassis_power_result;   /**< 本周期保留比例、功率预测和分配状态。 */
 
 static float Chassis_Power_Arbitrator(float base_power_limit,
                                       float cur_buffer,
@@ -23,76 +30,39 @@ static float Chassis_Power_Arbitrator(float base_power_limit,
                                       const Cap_t *cap_data,
                                       bool *out_discharge,
                                       float *out_cap_limit);
-/**
- * @brief  非对称线性斜坡限幅函数
- * @param  target      目标值
- * @param  current     当前值
- * @param  acc_step    加速最大步长 (绝对值)
- * @param  dec_step    减速最大步长 (绝对值)
- * @return float       经过限制的当前值
- */
-static float Ramp_Calc(float target, float current, float acc_step, float dec_step, float dt)
-{
-    float step = 0.0f;
-    bool is_accelerating = false;
-    if (current >= 0.0f && target > current) {
-        is_accelerating = true;
-    }
-    else if (current <= 0.0f && target < current) {
-        is_accelerating = true;
-    }
-    step = is_accelerating ? acc_step * dt : dec_step * dt;
-    if (target > current) {
-        current += step;
-        if (current > target) {
-            current = target;
-        }
-    } else if (target < current) {
-        current -= step;
-        if (current < target) {
-            current = target;
-        }
-    }
-    return current;
-}
 
-
-/**
- * @brief 底盘控制初始化
- * @param MOTOR 底盘电机总结构体指针
- * @return uint8_t 初始化状态
- */
 uint8_t Chassis_Init(Chassis_Cfg_t *cfg, Chassis_Type_e type)
 {
     if (cfg == NULL) return 1;
 
     cfg->type = type;
-    cfg->mass = 17.5f;
-    cfg->inertia = 1.0f;
-    cfg->torque_to_raw = ((1.0f / (15.7647f * 0.0157f * 0.85f)) * (16384.0f / 20.0f));
-    for(int i=0; i<4; i++) cfg->steer_offset[i] = 0;
+    cfg->mass = 18.5f;
+    cfg->inertia = 2.0f;
+    for (int i = 0; i < 4; i++) cfg->steer_offset[i] = 0.0f;
+
     switch (type) {
         case MECANUM:
             cfg->wheel_r = 0.075f;
-            cfg->Lx = 0.20f;
-            cfg->Ly = 0.20f;
+            cfg->Lx = 0.17f;
+            cfg->Ly = 0.17f;
             cfg->gear_ratio = 3591.0f / 187.0f;
             break;
         case OMNI:
             cfg->wheel_r = 0.075f;
             cfg->Lx = 0.2f;
             cfg->Ly = 0.2f;
-            cfg->gear_ratio = 3591.0f / 187.0f;
+            cfg->gear_ratio = 15.76f;
             break;
         case SWERVE:
             cfg->wheel_r = 0.06f;
-            cfg->Lx = 0.2f;
-            cfg->Ly = 0.22f;
+            cfg->Lx = 0.24f;
+            cfg->Ly = 0.24f;
             cfg->gear_ratio = 15.76f;
             break;
         default:
             return 1;
     }
+    cfg->torque_to_raw = (1.0f / (cfg->gear_ratio * 0.0157f * 0.85f)) * (16384.0f / 20.0f);
     return 0;
 }
 /**
@@ -103,34 +73,34 @@ uint8_t Chassis_Init(Chassis_Cfg_t *cfg, Chassis_Type_e type)
 uint8_t Chassis_Control_Init(void)
 {
     //底盘初始化
-    Chassis_Init(&chassis_ctrl.chassis_cfg,1);
+    Chassis_Init(&chassis_ctrl.chassis_cfg,OMNI);
+    Chassis_ESKF_Init(&chassis_eskf);
 
-    float PID_vx[3] = {9.0f,   0.0f,  0.0f};
-    PID_Init(&chassis_ctrl.vx, 15.0f, 0.0f, PID_vx,
+    float PID_vx[3] = {12.0f,   0.0f,  0.0f};
+    PID_Init(&chassis_ctrl.vx, 120.0f, 0.0f, PID_vx,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_vy[3] = {9.0f,   0.0f,  0.0f};
-    PID_Init(&chassis_ctrl.vy, 15.0f, 0.0f, PID_vy,
+    float PID_vy[3] = {12.0f,   0.0f,  0.0f};
+    PID_Init(&chassis_ctrl.vy, 120.0f, 0.0f, PID_vy,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_vw[3] = {9.0f,   0.0f,  0.0f};
-    PID_Init(&chassis_ctrl.vw, 18.0f, 0.0f, PID_vw,
+    float PID_vw[3] = {10.0f,   0.0f,  0.0f};
+    PID_Init(&chassis_ctrl.vw, 180.0f, 0.0f, PID_vw,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     // 底盘跟随PID初始化
-    float PID_Follow_Pos[3] = {18.0f,   0.0f,   0.0f};
+    float PID_Follow_Pos[3] = {20.0f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Pos, 15.0f, 0.0f, PID_Follow_Pos,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-
-    float PID_Follow_Spd[3] = {1.5f,   0.0f,   0.0f};
-    PID_Init(&chassis_ctrl.Follow_Spd, 15.0f, 1.0f, PID_Follow_Spd,
+    float PID_Follow_Spd[3] = {0.5f,   0.0f,   0.0f};
+    PID_Init(&chassis_ctrl.Follow_Spd, 20.0f, 1.0f, PID_Follow_Spd,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     // 功率控制初始化及参数配置
     Power_Ctrl_Init(&chassis_model);
-    for(int i=0; i<4; i++) {
-        // 配置驱动轮节点，3508 功率模型
-        drive_nodes[i].state = &m_states[i];
-        drive_nodes[i].model = &MODEL_M3508;
+    /* 每个节点绑定一个真实电机；16000 为合成电流的 raw 上限，不是安培。 */
+    chassis_power_result = (Power_Motion_Result_t){0};
+    for (uint8_t wheel_index = 0; wheel_index < 4; wheel_index++) {
+        motion_nodes[wheel_index].motor.state = &m_states[wheel_index];
+        motion_nodes[wheel_index].motor.model = &MODEL_M3508;
+        motion_nodes[wheel_index].max_cmd = 16000.0f;
     }
-    pwr_groups[0].nodes = drive_nodes;
-    pwr_groups[0].node_count = 4;
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
     return 1;
@@ -160,9 +130,9 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
     if (chassis_cmd.mode == CHASSIS_CMD_SAFE || is_system_locked)
     {
         // 清空PID
-        for (int i = 0; i < 4; i++) {
-            PID_Clear(&chassis_ctrl.Drive_S[i]);
-        }
+        PID_Clear(&chassis_ctrl.vx);
+        PID_Clear(&chassis_ctrl.vy);
+        PID_Clear(&chassis_ctrl.vw);
         PID_Clear(&chassis_ctrl.Follow_Pos);
         PID_Clear(&chassis_ctrl.Follow_Spd);
         // 清空斜坡函数
@@ -172,11 +142,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
     }
     else
     {
-        float vw_tar = chassis_cmd.target_vw;
-        // 非对称梯形加减速
-        cur_vx_gimbal = Ramp_Calc(chassis_cmd.target_vx, cur_vx_gimbal, 5.0f, 100.0f,dt);
-        cur_vy_gimbal = Ramp_Calc(chassis_cmd.target_vy, cur_vy_gimbal, 5.0f, 100.0f,dt);
-        cur_vw        = Ramp_Calc(vw_tar,        cur_vw,        350.0f,  400.0f,dt);
 
         for (int i = 0; i < 4; i++)
         {
@@ -184,17 +149,66 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
         }
         Chassis_Forward(&chassis_ctrl.chassis_cfg,&chassis_ctrl.chassis_feedback);
 
-        PID_Calculate(&chassis_ctrl.vx, chassis_ctrl.chassis_feedback.vx, cur_vx_gimbal);
-        PID_Calculate(&chassis_ctrl.vy, chassis_ctrl.chassis_feedback.vy, cur_vy_gimbal);
+        if (imu != NULL && imu_ctrl_flag.fusion_enabled)
+        {
+            Chassis_ESKF_Input_t eskf_in = {
+                .dt = dt,
+                .wheel_vx = chassis_ctrl.chassis_feedback.vx,
+                .wheel_vy = chassis_ctrl.chassis_feedback.vy,
+                .wheel_vw = chassis_ctrl.chassis_feedback.vw,
+                .wheel_valid = Is_Group_Online(CHASSIS) ? 1 : 0,
+                .imu_gx = imu->gyro[0],
+                .imu_gy = imu->gyro[1],
+                .imu_gz = imu->gyro[2],
+                .imu_ax = imu->accel[0],
+                .imu_ay = imu->accel[1],
+                .imu_az = imu->accel[2],
+                .roll = imu->roll * DEG2RAD,
+                .pitch = imu->pitch * DEG2RAD,
+                .attitude_valid = 1,
+            };
+            Chassis_ESKF_Update(&chassis_eskf, &eskf_in, &eskf_out);
+            VOFA_JustFloat(&huart6,9,chassis_ctrl.chassis_feedback.vx,chassis_ctrl.chassis_feedback.vy,chassis_ctrl.chassis_feedback.vw,
+            eskf_out.vx, eskf_out.vy, eskf_out.vw,imu->pitch,imu->roll,eskf_out.slip_score);
+            chassis_ctrl.chassis_feedback.vx = eskf_out.vx;
+            chassis_ctrl.chassis_feedback.vy = eskf_out.vy;
+            chassis_ctrl.chassis_feedback.vw = eskf_out.vw;
+        }
+
+        float vw_tar = chassis_cmd.target_vw;
+        // 底盘跟随模式下，计算底盘跟随PID
+        if (chassis_cmd.mode == CHASSIS_CMD_FOLLOW) {
+            PID_Calculate(&chassis_ctrl.Follow_Pos, chassis_cmd.offset_angle, 0.0f);
+            vw_tar = PID_Calculate(&chassis_ctrl.Follow_Spd, chassis_ctrl.chassis_feedback.vw, chassis_ctrl.Follow_Pos.Output);
+        }
+        // 非对称梯形加减速
+        cur_vx_gimbal = chassis_cmd.target_vx;
+        cur_vy_gimbal = chassis_cmd.target_vy;
+        cur_vw        = vw_tar;
+        // 底盘坐标系旋转矩阵
+        float cos_theta = arm_cos_f32(chassis_cmd.offset_angle);
+        float sin_theta = arm_sin_f32(chassis_cmd.offset_angle);
+        float cur_vx_chassis = cur_vx_gimbal * cos_theta + cur_vy_gimbal * sin_theta;
+        float cur_vy_chassis = cur_vy_gimbal * cos_theta - cur_vx_gimbal * sin_theta;
+
+        PID_Calculate(&chassis_ctrl.vx, chassis_ctrl.chassis_feedback.vx, cur_vx_chassis);
+        PID_Calculate(&chassis_ctrl.vy, chassis_ctrl.chassis_feedback.vy, cur_vy_chassis);
         PID_Calculate(&chassis_ctrl.vw, chassis_ctrl.chassis_feedback.vw, cur_vw);
 
-        // 逆运动学与速度环 PID 计算
-        Chassis_Force(&chassis_ctrl.chassis_cfg,chassis_ctrl.vx.Output,chassis_ctrl.vy.Output,chassis_ctrl.vw.Output
-            ,&chassis_ctrl.chassis_feedback,&chassis_ctrl.chassis_command);
-        // 功率控制
-        for(int i = 0; i < 4; i++) {
-            m_states[i].speed_rpm = c_motor->DJI_3508_Chassis[i].Speed_now;
-            m_states[i].original_cmd = chassis_ctrl.chassis_command.wheel_torque_raw[i];
+        /* 将线加速度与角加速度分别映射为轮电流，避免先混合后丢失运动分量。 */
+        Chassis_Command_t translation_command = {0};
+        Chassis_Command_t rotation_command = {0};
+        Chassis_Force(&chassis_ctrl.chassis_cfg,
+                      chassis_ctrl.vx.Output, chassis_ctrl.vy.Output, 0.0f,
+                      &chassis_ctrl.chassis_feedback, &translation_command);
+        Chassis_Force(&chassis_ctrl.chassis_cfg,
+                      0.0f, 0.0f, chassis_ctrl.vw.Output,
+                      &chassis_ctrl.chassis_feedback, &rotation_command);
+        /* 功率预测使用当前实测电机 RPM，而不是目标轮速。 */
+        for (uint8_t wheel_index = 0; wheel_index < 4; wheel_index++) {
+            m_states[wheel_index].speed_rpm = c_motor->DJI_3508_Chassis[wheel_index].Speed_now;
+            motion_nodes[wheel_index].translation_cmd = translation_command.wheel_torque_raw[wheel_index];
+            motion_nodes[wheel_index].rotation_cmd = rotation_command.wheel_torque_raw[wheel_index];
         }
         bool trigger_discharge = chassis_cmd.is_cap_on;// 输入电容开启标志
         float cap_board_limit = 0.0f;
@@ -208,11 +222,21 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
         else {
             trigger_discharge = FALSE;
             cap_board_limit = 45.0f;//
-            final_limit = 75.0f;
+            final_limit = 150.0f;
         }
-        Power_Ctrl_Calculate(&chassis_model, final_limit, pwr_groups, 1);
-        for(int i = 0; i < 4; i++) {
-            chassis_ctrl.chassis_command.wheel_torque_raw[i] = m_states[i].limited_cmd;
+        if (final_limit < 0.0f) final_limit = 0.0f;
+        /* 跟随模式优先追上云台；小陀螺及其他运行模式优先保留平移。 */
+        Power_Motion_Priority_t power_priority = chassis_cmd.mode == CHASSIS_CMD_FOLLOW
+            ? POWER_PRIORITY_ROTATION : POWER_PRIORITY_TRANSLATION;
+        Power_Motion_Status_t power_status = Power_Ctrl_Allocate_Motion_With_Priority(
+            &chassis_model, final_limit, motion_nodes, 4, power_priority, &chassis_power_result);
+        /* 仅发送已通过功率和电流约束检查的结果，分配失败时本周期输出零电流。 */
+        bool power_output_valid = power_status == POWER_MOTION_OK ||
+                                  power_status == POWER_MOTION_LIMITED;
+        for (uint8_t wheel_index = 0; wheel_index < 4; wheel_index++) {
+            /* 分配器已约束每轮电流，不再逐轮硬截断，以免改变合力方向。 */
+            chassis_ctrl.chassis_command.wheel_torque_raw[wheel_index] =
+                power_output_valid ? m_states[wheel_index].limited_cmd : 0.0f;
         }
         // 下发电容通讯数据
         CapSetData_t cap_cmd = {0};

@@ -37,8 +37,13 @@ OFFLINE_NODE(&DBUS.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 UART_RX_NODE(&huart6, 921600, 0, VT13_RX_DATA, NULL, 13, &VT13, VT13_Resolved);
 OFFLINE_NODE(&VT13.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 
-UART_RX_NODE(&huart1, 115200, 0, Referee_Rx_Buf[0], Referee_Rx_Buf[1], REFEREE_RXFRAME_LENGTH, &Referee, Referee_System_Frame_Update);
+UART_RX_NODE(&huart1, 921600, 0, Referee_Rx_Buf[0], Referee_Rx_Buf[1], REFEREE_RXFRAME_LENGTH, &Referee, Referee_System_Frame_Update);
 OFFLINE_NODE(&Referee.offline, REFEREE_OFFLINE_TIME, GROUP_NONE);
+
+CAN_RX_NODE(CAN1, 0x288, &cap, Power_Cap_Rx);
+OFFLINE_NODE(&cap.get.offline, CAP_OFFLINE_TIME, GROUP_NONE);
+
+CAN_RX_NODE(CAN1, 0x231, &g2c, DualBoard_CAN_Rx_Callback);
 
 CAN_RX_NODE(CAN1, 0x301, &gimbal_motors.DM4310_Yaw, DM_1to4_Resolve);
 OFFLINE_NODE(&gimbal_motors.DM4310_Yaw.offline, MOTOR_OFFLINE_TIME, GIMBAL);

@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 #include "Robot_Config.h"
-#include "Chassis_Calc.h"
 #include "Chassis_Kinematics.h"
 #include "IMU_Task.h"
 
@@ -15,10 +14,8 @@ typedef struct {
     PID_t vx;
     PID_t vy;
     PID_t vw;
-    PID_t Drive_S[4];
     PID_t Follow_Pos;       // 跟随外环：角度位置环
     PID_t Follow_Spd;       // 跟随内环：角速度速度环
-    mecanumInit_typdef Mecanum;
     Chassis_Cfg_t chassis_cfg;
     Chassis_Feedback_t chassis_feedback;
     Chassis_Command_t chassis_command;
