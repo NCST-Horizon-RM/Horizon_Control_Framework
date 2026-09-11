@@ -2,6 +2,8 @@
 // Created by CaoKangqi on 2026/6/14.
 //
 #include "All_Task.h"
+#include "FreeRTOS.h"
+#include "task.h"
 #include "BSP_SPI.h"
 #include "Robot_Config.h"
 #include "Catapult_Ctrl.h"

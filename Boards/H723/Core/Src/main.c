@@ -18,10 +18,14 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
+#include "FreeRTOS.h"
+#include "cmsis_os2.h"
+#include "adc.h"
 #include "cordic.h"
 #include "dma.h"
 #include "fdcan.h"
+#include "i2c.h"
+#include "octospi.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
@@ -120,6 +124,12 @@ int main(void)
   MX_TIM7_Init();
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
+  MX_UART9_Init();
+  MX_I2C1_Init();
+  MX_TIM1_Init();
+  MX_ADC1_Init();
+  MX_OCTOSPI2_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   MX_USB_DEVICE_Init();
   System_Init();
