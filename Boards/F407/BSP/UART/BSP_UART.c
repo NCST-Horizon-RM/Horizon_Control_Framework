@@ -13,17 +13,13 @@ void Auto_UART_Router_Init(void)
     for (; node < &__stop_UART_Reg_Sec; node++)
     {
         // 如果传入了非零的波特率，且与当前初始化波特率不同，则进行重配置
-        if (node->baudrate != 0 && node->huart->Init.BaudRate != node->baudrate)
+        if (node->baudrate != 0 || node->parity != 0 || node->stopbits != 0)
         {
-            // 中止可能正在进行的传输
             HAL_UART_Abort(node->huart);
-            // 修改 Init 结构体里的波特率
-            node->huart->Init.BaudRate = node->baudrate;
-            // 重新调用 HAL_UART_Init，底层会重新写入 BRR 寄存器
-            if (HAL_UART_Init(node->huart) != HAL_OK)
-            {
-                continue;
-            }
+            if (node->baudrate != 0) node->huart->Init.BaudRate = node->baudrate;
+            if (node->parity   != 0) node->huart->Init.Parity   = node->parity;
+            if (node->stopbits != 0) node->huart->Init.StopBits = node->stopbits;
+            HAL_UART_Init(node->huart);
         }
         BSP_UART_Register_Slot(node->huart, node->expected_size,
                                node->rx_buf0, node->rx_buf1,

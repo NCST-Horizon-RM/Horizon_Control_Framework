@@ -120,7 +120,7 @@ int main(void)
   MX_TIM7_Init();
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
-  MX_UART8_Init();
+  MX_UART9_Init();
   /* USER CODE BEGIN 2 */
   MX_USB_DEVICE_Init();
   System_Init();

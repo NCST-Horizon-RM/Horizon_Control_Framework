@@ -1,60 +1,49 @@
+/**
+* @file SBUS.h
+ * @brief  SBUS 协议解析头文件
+ * @version 1.0
+ * @date 2026-09-11
+ * @author CaoKangqi
+ */
+
 #ifndef HORIZON_SBUS_H
 #define HORIZON_SBUS_H
 
-#include "main.h"
+#include <stdint.h>
+#include <stdbool.h>
+
 #include "Offline_Detector.h"
 
+/**
+ * @brief 开关档位状态枚举
+ */
+typedef enum {
+  SBUS_SW_UP    = 1,  /**< 开关上档 */
+  SBUS_SW_DOWN  = 2,  /**< 开关下档 */
+  SBUS_SW_CEN   = 3,  /**< 开关中档 */
+  SBUS_SW_ERROR = 4   /**< 通道越界或指针异常 */
+} SBUS_SwitchState_Env;
 
-typedef enum
-{
-  SBUS_SUCCESS = 0,
-  SBUS_INVALID_PARAM = 1,
-  SBUS_DATA_LENGTH_ERROR = 2,
-  SBUS_STARTBYTE_ERROR = 3,
-  SBUS_ENDBYTE_ERROR = 4
-}SBUS_ERROR_CODE_TypeDef;
-
-
-typedef struct
-{
+/**
+ * @brief 应用层使用的解析结果结构体
+ */
+typedef struct {
   Offline_Check_t offline;
-  uint8_t startbyte;
-  int16_t CH[16];
-  uint8_t flags;
-  uint8_t endbyte;
-}SBUS_DATA_typedef;
 
+  /**
+   * @brief 遥控器通道数据解算
+   */
+  struct {
+    int16_t CH[16];     /**< 16 通道解算值 (-1024 ~ 1024, 中点为 0) */
+  } Remote;
 
-typedef enum
-{
-  SBUS_SW_UP=1,
-  SBUS_SW_Down,
-  SBUS_SW_Cen,
-  SBUS_SW_Error,
-}SBUS_ChannelState;
+  uint8_t flags;          /**< 原始 flags 字节 (bit0:CH17, bit1:CH18, bit2:FrameLost, bit3:FailSafe) */
+  uint8_t failsafe;       /**< 失控保护标志 (1:接收机进入失控保护) */
+  uint8_t frame_lost;     /**< 丢帧标志 (1:上一帧丢失) */
+} SBUS_Typedef;
 
-typedef enum
-{
-  SBUS_Channel_1=0,
-  SBUS_Channel_2,
-  SBUS_Channel_3,
-  SBUS_Channel_4,
-  SBUS_Channel_5,
-  SBUS_Channel_6,
-  SBUS_Channel_7,
-  SBUS_Channel_8,
-  SBUS_Channel_9,
-  SBUS_Channel_10,
-  SBUS_Channel_11,
-  SBUS_Channel_12,
-  SBUS_Channel_13,
-  SBUS_Channel_14,
-  SBUS_Channel_15,
-  SBUS_Channel_16,
-}SBUS_Channel_t;
+void SBUS_Resolved(uint8_t* Data, void *device_ptr, uint16_t size);
 
-SBUS_ERROR_CODE_TypeDef SBUS_decode(uint8_t *raw,  SBUS_DATA_typedef* data,uint8_t len);
-int16_t SBUS_GetChannelValue( SBUS_DATA_typedef* data, SBUS_Channel_t Channel);
-SBUS_ChannelState SBUS_GetChannelState( SBUS_DATA_typedef* data, SBUS_Channel_t Channel);
+SBUS_SwitchState_Env SBUS_GetSwitchState(SBUS_Typedef *sbus, uint8_t ch);
 
-#endif
+#endif // HORIZON_SBUS_H
