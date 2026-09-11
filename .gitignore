@@ -1,16 +1,56 @@
+# Build output and compiler caches
 build/
-.claude
-.agents
-H7_Framework.jdebug
-H7_Framework.jdebug.user
-H7-GDB.jdebug
-H7-GDB.jdebug.user
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+cmake_install.cmake
+CTestTestfile.cmake
+build.ninja
+.ninja_deps
+.ninja_log
+.cache/
+*.o
+*.obj
+*.elf
+*.hex
+*.bin
+*.map
+*.su
+*.d
+*.log
+
+# Local editor, debugger and agent state
+.claude/
+.agents/
+.codex/
 .settings/
 .idea/
 .vscode/
 .clangd
+*.jdebug
+*.jdebug.user
 CMakeUserPresets.json
-__pycache__/
-.ideagit rm -r --cached .
+
+# CubeMX metadata and redundant board-local presets.
+# Keep the root CMakePresets.json, .ioc files and generated source/dependencies.
+.mxproject
+/Boards/*/CMakePresets.json
 mx.scratch
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editor temporary and backup files
+*.swp
+*.swo
+*.tmp
+*.bak
+*~
+Thumbs.db
+.DS_Store
+
+# Personal launch helper
 H7一键启动OpenOCD.bat
