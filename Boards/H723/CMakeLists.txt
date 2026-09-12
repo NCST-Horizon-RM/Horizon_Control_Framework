@@ -41,6 +41,8 @@ foreach(SOURCE_FILE ${CMSIS_DSP_SOURCES})
     endif()
 endforeach()
 # 只编译聚合主文件（如 MatrixFunctions.c 内部 #include 各实现），避免 NEON 模板文件被单独编译
+# 注意：板级 BSP 源文件已由上面的 GLOB_RECURSE BSP_SOURCES 收集，此处不要重复添加；
+#      更不要把其它板卡（如 ../F407/...）的源文件编进本板 target（会导致 hadc3/ADC3 等未定义）。
 set(CMSIS_DSP_SOURCES ${CMSIS_DSP_MAIN_SOURCES})
 
 add_executable(${CMAKE_PROJECT_NAME} ${BSP_SOURCES} ${CMSIS_DSP_SOURCES})
