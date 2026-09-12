@@ -8,6 +8,7 @@
 #include "BSP_CAN.h"
 #include "BSP_TIM.h"
 #include "BSP_UART.h"
+#include "BSP_ADC.h"
 #include "Buzzer.h"
 #include "LED.h"
 #include "System_State.h"
@@ -44,4 +45,6 @@ void System_Init() {
     System_State_Init();
     //指令中心初始化
     Robot_Cmd_Init();
+    //ADC初始化
+    BSP_ADC_Init();
 }

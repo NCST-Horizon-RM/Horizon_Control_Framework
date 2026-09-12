@@ -4,6 +4,7 @@
 #include "System_Init.h"
 
 #include "BMI088.h"
+#include "BSP_ADC.h"
 #include "BSP_DWT.h"
 #include "BSP_CAN.h"
 #include "WS2812.h"
@@ -56,4 +57,6 @@ void System_Init() {
     System_State_Init();
     //指令中心初始化
     Robot_Cmd_Init();
+    //ADC初始化
+    BSP_ADC_Init();
 }
