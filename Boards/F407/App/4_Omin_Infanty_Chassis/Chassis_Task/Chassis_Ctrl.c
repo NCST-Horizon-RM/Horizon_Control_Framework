@@ -102,7 +102,7 @@ uint8_t Chassis_Control_Init(void)
     return 1;
 }
 
-/**
+/**2
  * @brief 底盘控制任务
  */
 void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t *imu, float dt)
