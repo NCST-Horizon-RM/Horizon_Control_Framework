@@ -7,7 +7,6 @@
 #include "Comm_DualBoard.h"
 #include "Robot_Config.h"
 #include "Power_CAP.h"
-#include "Power_Ctrl.h"
 #include "Referee.h"
 #include "System_State.h"
 #include "Robot_Cmd.h"
@@ -17,7 +16,6 @@ static Chassis_Ctrl_Block_t chassis_ctrl;
 static Chassis_ESKF_t chassis_eskf;
 Chassis_ESKF_Output_t eskf_out = {0};
 //功率控制
-static Power_Ctrl_t chassis_model;
 
 static float Chassis_Power_Arbitrator(float base_power_limit,
                                       float cur_buffer,
@@ -92,8 +90,6 @@ uint8_t Chassis_Control_Init(void)
         PID_Init(&chassis_ctrl.Steer_S[i], 16384.0f, 4000.0f, PID_6020_Spd,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
         }
-    Power_Ctrl_Init(&chassis_model);
-
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
     return 1;

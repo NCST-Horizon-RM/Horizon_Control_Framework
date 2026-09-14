@@ -85,7 +85,4 @@ void Gimbal_Control_Task(const Gimbal_Motor_Group_t *g_motor,const IMU_Data_t *g
                            0,
                            0);
 
-    VOFA_JustFloat(&huart6,4,gimbal_ctrl.Pitch_P.Ref,gimbal_ctrl.Pitch_P.Measure
-        ,gimbal_ctrl.Yaw_P.Ref,gimbal_ctrl.Yaw_P.Measure);
-
 }

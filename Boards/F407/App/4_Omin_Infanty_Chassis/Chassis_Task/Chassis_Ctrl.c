@@ -18,9 +18,7 @@ static Chassis_Ctrl_Block_t chassis_ctrl;
 static Chassis_ESKF_t chassis_eskf;
 Chassis_ESKF_Output_t eskf_out = {0};
 //功率控制
-static Power_Ctrl_t chassis_model;
 static Motor_Power_State_t m_states[4];//底盘共4个电机
-
 static Power_Motion_Node_t motion_nodes[4];          /**< 四轮模型、运动电流分量及电流上限。 */
 static Power_Motion_Result_t chassis_power_result;   /**< 本周期保留比例、功率预测和分配状态。 */
 
@@ -92,9 +90,7 @@ uint8_t Chassis_Control_Init(void)
     float PID_Follow_Spd[3] = {0.5f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Spd, 20.0f, 1.0f, PID_Follow_Spd,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    // 功率控制初始化及参数配置
-    Power_Ctrl_Init(&chassis_model);
-    /* 每个节点绑定一个真实电机；16000 为合成电流的 raw 上限，不是安培。 */
+    /* 每个节点绑定一个电机；16000 为控制电流限幅 */
     chassis_power_result = (Power_Motion_Result_t){0};
     for (uint8_t wheel_index = 0; wheel_index < 4; wheel_index++) {
         motion_nodes[wheel_index].motor.state = &m_states[wheel_index];
@@ -168,8 +164,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
                 .attitude_valid = 1,
             };
             Chassis_ESKF_Update(&chassis_eskf, &eskf_in, &eskf_out);
-            VOFA_JustFloat(&huart6,9,chassis_ctrl.chassis_feedback.vx,chassis_ctrl.chassis_feedback.vy,chassis_ctrl.chassis_feedback.vw,
-            eskf_out.vx, eskf_out.vy, eskf_out.vw,imu->pitch,imu->roll,eskf_out.slip_score);
             chassis_ctrl.chassis_feedback.vx = eskf_out.vx;
             chassis_ctrl.chassis_feedback.vy = eskf_out.vy;
             chassis_ctrl.chassis_feedback.vw = eskf_out.vw;
@@ -222,14 +216,14 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
         else {
             trigger_discharge = FALSE;
             cap_board_limit = 45.0f;//
-            final_limit = 150.0f;
+            final_limit = 60.0f;
         }
         if (final_limit < 0.0f) final_limit = 0.0f;
-        /* 跟随模式优先追上云台；小陀螺及其他运行模式优先保留平移。 */
+        /* 跟随模式优先旋转；小陀螺及其他运行模式优先保留平移。 */
         Power_Motion_Priority_t power_priority = chassis_cmd.mode == CHASSIS_CMD_FOLLOW
             ? POWER_PRIORITY_ROTATION : POWER_PRIORITY_TRANSLATION;
         Power_Motion_Status_t power_status = Power_Ctrl_Allocate_Motion_With_Priority(
-            &chassis_model, final_limit, motion_nodes, 4, power_priority, &chassis_power_result);
+            final_limit, motion_nodes, 4, power_priority, &chassis_power_result);
         /* 仅发送已通过功率和电流约束检查的结果，分配失败时本周期输出零电流。 */
         bool power_output_valid = power_status == POWER_MOTION_OK ||
                                   power_status == POWER_MOTION_LIMITED;

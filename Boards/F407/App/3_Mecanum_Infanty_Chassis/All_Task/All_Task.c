@@ -77,7 +77,7 @@ void Motor_Task(void *argument)
 
         motor_period_s = DWT_GetDeltaT(&motor_DWT_Count);
 
-        Chassis_Control_Task(&chassis_motors,&IMU_Data,motor_period_s);
+
     }
 }
 
@@ -87,7 +87,7 @@ static float TASK1_Period_S = 0.0f;
 void StartTask01(void *argument)
 {
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xTimeIncrement = pdMS_TO_TICKS(1);//绝对延时1ms
+    const TickType_t xTimeIncrement = pdMS_TO_TICKS(2);//绝对延时1ms
 
     TASK1_DWT_Count = DWT->CYCCNT;
     for(;;)
@@ -96,6 +96,7 @@ void StartTask01(void *argument)
 
         TASK1_Period_S = DWT_GetDeltaT(&TASK1_DWT_Count);
         //在这里加代码
+        Chassis_Control_Task(&chassis_motors,&IMU_Data,TASK1_Period_S);
     }
 }
 

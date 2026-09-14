@@ -16,7 +16,7 @@ typedef struct {
     float buffer_energy;   // 本地解算的缓冲能量
 } Power_Meter_t;
 
-void CAN_Power_Rx(Power_Meter_t *Power, uint8_t *rx_data);
+void CAN_Power_Rx(void *instance, uint8_t *rx_buf);
 void Buffer_Calc(Power_Meter_t *Power, float dt, float power_limit);
 
 #endif //HORIZON_POWER_METER_H
