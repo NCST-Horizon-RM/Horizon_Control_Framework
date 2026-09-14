@@ -79,26 +79,27 @@ void BSP_UART_Register_Slot(UART_HandleTypeDef *huart,
  * @param  Size:  预期的最大接收字节数
  * @return HAL_StatusTypeDef: HAL_OK 启动成功, HAL_ERROR 配置错误或句柄为空
  */
-HAL_StatusTypeDef UART_ReceiveToIdle_DMA(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size) {
-    if (huart == NULL || pData == NULL || Size == 0) {
-        return HAL_ERROR;
-    }
-    if (huart->hdmarx == NULL) {
-        return HAL_ERROR;
-    }
-    // 清除各种错误标志位
+HAL_StatusTypeDef UART_ReceiveToIdle_DMA(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size)
+{
+    if (huart == NULL || pData == NULL || Size == 0) return HAL_ERROR;
+    if (huart->hdmarx == NULL) return HAL_ERROR;
+
+    /* Circular 模式下如果已经在接收，不重复启动 */
+    if (huart->hdmarx->Init.Mode == DMA_CIRCULAR &&
+        huart->RxState == HAL_UART_STATE_BUSY_RX) {
+        return HAL_BUSY;
+        }
+
     __HAL_UART_CLEAR_PEFLAG(huart);
     __HAL_UART_CLEAR_FEFLAG(huart);
     __HAL_UART_CLEAR_NEFLAG(huart);
     __HAL_UART_CLEAR_OREFLAG(huart);
-    // 读取一次 DR 确保清理 RXNE 标志和残留数据
     volatile uint32_t tmp = huart->Instance->DR;
     (void)tmp;
-    // 重新启动 DMA 接收
+
     if (HAL_UARTEx_ReceiveToIdle_DMA(huart, pData, Size) != HAL_OK) {
         return HAL_ERROR;
     }
-    // 关闭 DMA 半传输中断
     __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
     return HAL_OK;
 }
@@ -114,15 +115,34 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     BSP_UART_Slot_t *slot = &BSP_UART_Table[idx];
     uint8_t *pData = huart->pRxBuffPtr;
 
-    uint8_t *next_buf = slot->rx_buf0;
-    if (slot->rx_buf1 != NULL) {
-        next_buf = (pData == slot->rx_buf0) ? slot->rx_buf1 : slot->rx_buf0;
+    if (huart->hdmarx->Init.Mode == DMA_CIRCULAR)
+    {
+        /* ============ Circular 模式 ============ */
+        if (slot->expected_size != 0 && Size != slot->expected_size)
+        {
+            HAL_UART_AbortReceive(huart);
+            UART_ReceiveToIdle_DMA(huart, slot->rx_buf0, slot->dma_rx_size);
+            return;
+        }
+        if (slot->resolve != NULL) {
+            slot->resolve(pData, slot->device_ptr, Size);
+        }
     }
-    UART_ReceiveToIdle_DMA(huart, next_buf, slot->dma_rx_size);
+    else
+    {
+        /* ============ Normal 模式 ============ */
+        uint8_t *next_buf = slot->rx_buf0;
+        if (slot->rx_buf1 != NULL) {
+            next_buf = (pData == slot->rx_buf0) ? slot->rx_buf1 : slot->rx_buf0;
+        }
+        /* 无论 Size 是否匹配，都须重启 */
+        UART_ReceiveToIdle_DMA(huart, next_buf, slot->dma_rx_size);
 
-    if (slot->expected_size != 0 && Size != slot->expected_size) return;
-    if (slot->resolve != NULL) {
-        slot->resolve(pData, slot->device_ptr, Size);
+        /* 只有 Size 正确才交给上层解析，错帧静默丢弃 */
+        if (slot->expected_size != 0 && Size != slot->expected_size) return;
+        if (slot->resolve != NULL) {
+            slot->resolve(pData, slot->device_ptr, Size);
+        }
     }
 }
 

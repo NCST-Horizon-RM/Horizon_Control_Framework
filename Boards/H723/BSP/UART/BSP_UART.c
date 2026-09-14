@@ -121,15 +121,27 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     BSP_UART_Slot_t *slot = &BSP_UART_Table[idx];
     uint8_t *pData = huart->pRxBuffPtr;
 
-    uint8_t *next_buf = slot->rx_buf0;
-    if (slot->rx_buf1 != NULL) {
-        next_buf = (pData == slot->rx_buf0) ? slot->rx_buf1 : slot->rx_buf0;
+    if (huart->hdmarx->Init.Mode == DMA_CIRCULAR)
+    {
+        if (slot->expected_size != 0 && Size != slot->expected_size)
+        {
+            HAL_UART_AbortReceive(huart);
+            UART_ReceiveToIdle_DMA(huart, slot->rx_buf0, slot->dma_rx_size);
+            return;
+        }
+        if (slot->resolve != NULL)
+            slot->resolve(pData, slot->device_ptr, Size);
     }
-    UART_ReceiveToIdle_DMA(huart, next_buf, slot->dma_rx_size);
+    else
+    {
+        uint8_t *next_buf = slot->rx_buf0;
+        if (slot->rx_buf1 != NULL)
+            next_buf = (pData == slot->rx_buf0) ? slot->rx_buf1 : slot->rx_buf0;
+        UART_ReceiveToIdle_DMA(huart, next_buf, slot->dma_rx_size);
 
-    if (slot->expected_size != 0 && Size != slot->expected_size) return;
-    if (slot->resolve != NULL) {
-        slot->resolve(pData, slot->device_ptr, Size);
+        if (slot->expected_size != 0 && Size != slot->expected_size) return;
+        if (slot->resolve != NULL)
+            slot->resolve(pData, slot->device_ptr, Size);
     }
 }
 

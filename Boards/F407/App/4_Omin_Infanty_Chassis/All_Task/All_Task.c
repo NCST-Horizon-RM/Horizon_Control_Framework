@@ -82,12 +82,13 @@ void Motor_Task(void *argument)
 }
 
 // 自定义任务1 1000Hz
+static DWT_Profiler_t Chassis_Control_Profiler;
 static uint32_t TASK1_DWT_Count = 0;
 static float TASK1_Period_S = 0.0f;
 void StartTask01(void *argument)
 {
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xTimeIncrement = pdMS_TO_TICKS(1);//绝对延时1ms
+    const TickType_t xTimeIncrement = pdMS_TO_TICKS(2);//绝对延时2ms
 
     TASK1_DWT_Count = DWT->CYCCNT;
     for(;;)
@@ -96,7 +97,11 @@ void StartTask01(void *argument)
 
         TASK1_Period_S = DWT_GetDeltaT(&TASK1_DWT_Count);
         //在这里加代码
+        DWT_Profile_Start(&Chassis_Control_Profiler);
+        // 底盘功率分配算法计算量较大，需要降频500Hz运行，并放入栈空间较大的任务中
         Chassis_Control_Task(&chassis_motors,&IMU_Data,TASK1_Period_S);
+        DWT_Profile_Stop(&Chassis_Control_Profiler);
+        Buffer_Calc(&Meter,TASK1_Period_S,60.0f);
     }
 }
 

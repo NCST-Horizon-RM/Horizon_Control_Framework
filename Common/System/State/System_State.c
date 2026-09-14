@@ -8,7 +8,6 @@ System_State_t sys_state;
 
 static struct {
     bool ref_online;
-    bool any_ref_pwr;
     bool chassis_pwr, chassis_grace;
     bool gimbal_pwr,  gimbal_grace;
     bool shoot_pwr,   shoot_grace;
@@ -26,6 +25,12 @@ static void Arbitrate_Global_Mode(uint32_t now);
 static bool Is_All_Tasks_Running(void) {
     return (sys_state.task_health.Chassis == STATUS_RUN &&
             sys_state.task_health.Gimbal  == STATUS_RUN &&
+            sys_state.task_health.Shoot   == STATUS_RUN);
+}
+
+static bool Is_Any_Core_Device_Online(void) {
+    return (sys_state.task_health.Chassis == STATUS_RUN ||
+            sys_state.task_health.Gimbal  == STATUS_RUN ||
             sys_state.task_health.Shoot   == STATUS_RUN);
 }
 
@@ -85,10 +90,6 @@ static void Update_Power_Status(uint32_t now, Referee_Data_t *ref) {
     pwr_info.gimbal_grace  = pwr_info.gimbal_pwr  && ((now - tick_g) < 1800);
     pwr_info.shoot_grace   = pwr_info.shoot_pwr   && ((now - tick_s) < 1800);
 
-    pwr_info.any_ref_pwr = pwr_info.ref_online &&
-                           (ref->robot_status.power_management_chassis_output ||
-                            ref->robot_status.power_management_gimbal_output ||
-                            ref->robot_status.power_management_shooter_output);
 }
 
 static bool Check_Boot_Sequence(uint32_t now) {
@@ -100,7 +101,7 @@ static bool Check_Boot_Sequence(uint32_t now) {
         return false;
     }
 
-    if (now < 21800 && !Is_All_Tasks_Running() && !pwr_info.any_ref_pwr) {
+    if (now < 21800 && !Is_Any_Core_Device_Online()) {
         return false;
     }
 

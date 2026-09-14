@@ -102,7 +102,7 @@ void Shoot_Control_Task(const Shoot_Motor_Group_t *g_motor, float dt)
         shoot_ctrl.Lfire_speed = 0.0f;
         shoot_ctrl.Rfire_speed = 0.0f;
         shoot_ctrl.Bmotor_P.Ref = smooth_ref = g_motor->DJI_2006_bo.Angle_Infinite;
-        shoot_ctrl.Feeder_Count.target_pos_cnt = -(int32_t)ceilf(smooth_ref / (shoot_ctrl.Counts_Shoot) - 0.1f);
+        shoot_ctrl.Feeder_Count.target_pos_cnt = shoot_ctrl.dir_sign * (int32_t)ceilf(smooth_ref / (shoot_ctrl.Counts_Shoot) - 0.1f);
     }
     if (shoot_cmd.mode == SHOOT_CMD_RUN || shoot_cmd.mode == SHOOT_CMD_FIRE) {
         shoot_ctrl.Lfire_speed = -6500.0f;//左摩擦轮目标转速
