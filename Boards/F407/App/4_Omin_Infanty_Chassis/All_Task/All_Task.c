@@ -101,7 +101,6 @@ void StartTask01(void *argument)
         // 底盘功率分配算法计算量较大，需要降频500Hz运行，并放入栈空间较大的任务中
         Chassis_Control_Task(&chassis_motors,&IMU_Data,TASK1_Period_S);
         DWT_Profile_Stop(&Chassis_Control_Profiler);
-        Buffer_Calc(&Meter,TASK1_Period_S,60.0f);
     }
 }
 

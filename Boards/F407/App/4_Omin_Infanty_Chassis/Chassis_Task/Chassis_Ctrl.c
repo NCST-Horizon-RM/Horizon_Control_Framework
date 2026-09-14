@@ -239,12 +239,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
         cap_cmd.Control.buffer_now    = (uint8_t)Referee.power_heat_data.buffer_energy;
         cap_cmd.Control.robot_state   = (Referee.robot_status.current_HP > 0) ? 1 : 0;
         Power_Cap_Tx(&hcan1, 0x252, &cap_cmd);
-        VOFA_JustFloat(&huart1,6,chassis_power_result.rotation_scale,
-            chassis_power_result.translation_scale,
-            Meter.power,
-            chassis_power_result.allocated_power,
-            Meter.buffer_energy,
-            60.0f);
     }
 
     if (!is_system_locked)
