@@ -43,6 +43,7 @@ typedef struct
 	float voltage;
 	float vel_rad;
 	float pos_rad;
+	float pos_single;
 	float pos_init_rad;
 }BM_MOTOR_DATA_Typedef;
 

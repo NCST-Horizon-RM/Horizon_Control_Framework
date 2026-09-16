@@ -28,11 +28,18 @@ typedef struct {
     PID_t right_length_pos;
     PID_t right_length_vel;
     PID_t roll;
-    float target_leg_length_m;
+    PID_t joint_pos[4];
+    PID_t joint_vel[4];
     float left_leg_force_n;
     float right_leg_force_n;
+    bool stand_initialized;
 } Chassis_Ctrl_Block_t;
 
+typedef enum {
+    CTRL_SAVE = 0,
+    CTRL_STAND,
+    CTRL_JUMP
+} Chassis_Control_Mode_t;
 uint8_t Chassis_Control_Init();
 void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_Group_t *l_motor,const IMU_Data_t *imu, float dt);
 

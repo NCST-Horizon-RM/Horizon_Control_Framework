@@ -82,6 +82,7 @@ void Motor_Task(void *argument)
 // 自定义任务1 1000Hz
 static uint32_t TASK1_DWT_Count = 0;
 static float TASK1_Period_S = 0.0f;
+static DWT_Profiler_t TASK1_Profiler = {0};
 void StartTask01(void *argument)
 {
     TickType_t xLastWakeTime = xTaskGetTickCount();
@@ -94,8 +95,11 @@ void StartTask01(void *argument)
 
         TASK1_Period_S = DWT_GetDeltaT(&TASK1_DWT_Count);
         //在这里加代码
+        DWT_Profile_Start(&TASK1_Profiler);
         BM_EnableDisable(&hfdcan2, 0x02);
         Chassis_Control_Task(&chassis_motors,&leg_motors, &IMU_Data, TASK1_Period_S);
+        DWT_Profile_Stop(&TASK1_Profiler);
+        //VOFA_JustFloat(&huart1,2,TASK1_Profiler.cost_us,0.0f);
     }
 }
 

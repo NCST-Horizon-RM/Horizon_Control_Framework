@@ -1,5 +1,6 @@
 #include "BM_Motor.h"
 #include "BSP_CAN.h"
+#include "Horizon_MATH.h"
 // 后有大写的代码为经常调用代码
 
 reporter BM_reporter1 = {0};
@@ -76,6 +77,7 @@ void BM_Motor_Resolve(void *instance, uint8_t *rx_data)
 
     DATA->vel_rad = -DATA->vel * 0.10471975511965976666666666666667f; // *pi/30
     DATA->pos_rad = -(float)DATA->pos_con * 0.00019174759848570513916015625f - DATA->pos_init_rad; // *pi/32768
+    DATA->pos_single = normalize_to_pi(DATA->pos_rad);
     // DATA->pos_init_rad = -(float)DATA->pos_init * 0.00019174759848570513916015625f; // *pi/32768
 }
 

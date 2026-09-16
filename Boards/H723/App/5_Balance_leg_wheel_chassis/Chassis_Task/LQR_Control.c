@@ -53,7 +53,7 @@ void LQR_Update(LQR_Control_t *lqr, const VMC_Control_t *vmc,
 
     /* Build the reference from commanded motion and equilibrium offsets. */
     memset(lqr->x_ref, 0, sizeof(lqr->x_ref));
-    lqr->x_ref[0] = lqr->target.position_m + 3.7f;
+    lqr->x_ref[0] = lqr->target.position_m;
     lqr->x_ref[1] = lqr->target.yaw_rad;
     lqr->x_ref[2] = lqr->target.pitch_rad;
     lqr->x_ref[3] = lqr->target.left_leg_theta_rad + e3_eval(vmc->left.length[0]);

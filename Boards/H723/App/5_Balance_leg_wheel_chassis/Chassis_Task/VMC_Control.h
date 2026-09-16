@@ -17,6 +17,8 @@ typedef struct {
     float theta_last[2];
     float Tp_front;
     float Tp_back;
+    float support_force;
+    float support_torque;
 } VMC_LegSite_t;
 
 typedef struct {
@@ -33,5 +35,13 @@ void VMC_Update(VMC_Control_t *vmc, float dt, float body_pitch_rad,
                 float pos_front_L, float pos_back_L,
                 float pos_front_R, float pos_back_R);
 void VMC_ForceToTorque(const float JRM[2][2], float force, float Tp_target,VMC_LegSite_t *leg);
+bool VMC_TorqueToForce(const float JRM[2][2], float torque_front,
+                       float torque_back, VMC_LegSite_t *leg);
+bool VMC_InverseKinematics(const VMC_Control_t *vmc,
+                           float target_length,
+                           float target_theta,
+                           float body_pitch_rad,
+                           float *pos_front,
+                           float *pos_back);
 
 #endif

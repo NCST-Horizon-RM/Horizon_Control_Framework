@@ -33,7 +33,7 @@ OFFLINE_NODE(&DBUS.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 
 UART_RX_NODE(&huart7, 921600,0,0, 21, NULL, NULL, 21, NULL, VT13_Resolved);
 
-UART_RX_NODE(&huart1, 115200, 0,0,0, Referee_Rx_Buf[0], Referee_Rx_Buf[1], REFEREE_RXFRAME_LENGTH, &Referee, Referee_System_Frame_Update);
+UART_RX_NODE(&huart1, 1152000, 0,0,0, Referee_Rx_Buf[0], Referee_Rx_Buf[1], REFEREE_RXFRAME_LENGTH, &Referee, Referee_System_Frame_Update);
 OFFLINE_NODE(&Referee.offline, REFEREE_OFFLINE_TIME, GROUP_NONE);
 
 CAN_RX_NODE(FDCAN1, 0x203, &chassis_motors.DJI_3508_Chassis[0], DJI_Motor_Resolve);

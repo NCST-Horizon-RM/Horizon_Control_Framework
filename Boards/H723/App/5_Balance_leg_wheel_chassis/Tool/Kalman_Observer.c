@@ -4,74 +4,171 @@
 
 #include "Kalman_Observer.h"
 #include "All_define.h"
+#include <math.h>
 #include <string.h>
 
+#define ESTIMATOR_STATE_DIM 3
+#define ESTIMATOR_MIN_VARIANCE 1.0e-6f
+
+static float Estimator_Clamp(const float value, const float min_value,
+                             const float max_value)
+{
+    if (value < min_value) {
+        return min_value;
+    }
+    if (value > max_value) {
+        return max_value;
+    }
+    return value;
+}
+
+static void Estimator_Symmetrize_Covariance(float covariance[9])
+{
+    for (int row = 0; row < ESTIMATOR_STATE_DIM; row++) {
+        for (int col = row + 1; col < ESTIMATOR_STATE_DIM; col++) {
+            const float value = 0.5f *
+                (covariance[row * ESTIMATOR_STATE_DIM + col] +
+                 covariance[col * ESTIMATOR_STATE_DIM + row]);
+            covariance[row * ESTIMATOR_STATE_DIM + col] = value;
+            covariance[col * ESTIMATOR_STATE_DIM + row] = value;
+        }
+        if (covariance[row * ESTIMATOR_STATE_DIM + row] <
+            ESTIMATOR_MIN_VARIANCE) {
+            covariance[row * ESTIMATOR_STATE_DIM + row] =
+                ESTIMATOR_MIN_VARIANCE;
+        }
+    }
+}
+
+static void Estimator_Predict(Kalman_Observer_t *est,
+                              const float imu_accel_x, const float dt)
+{
+    const float dt2 = dt * dt;
+    const float velocity = est->state[1];
+    const float accel = imu_accel_x - est->state[2];
+
+    est->state[0] += velocity * dt + 0.5f * accel * dt2;
+    est->state[1] += accel * dt;
+
+    /* F = [1 dt -dt^2/2; 0 1 -dt; 0 0 1], P = F P F' + Q */
+    const float F[9] = {
+        1.0f, dt, -0.5f * dt2,
+        0.0f, 1.0f, -dt,
+        0.0f, 0.0f, 1.0f
+    };
+    float FP[9] = {0.0f};
+    float predicted_covariance[9] = {0.0f};
+
+    for (int row = 0; row < ESTIMATOR_STATE_DIM; row++) {
+        for (int col = 0; col < ESTIMATOR_STATE_DIM; col++) {
+            for (int k = 0; k < ESTIMATOR_STATE_DIM; k++) {
+                FP[row * ESTIMATOR_STATE_DIM + col] +=
+                    F[row * ESTIMATOR_STATE_DIM + k] *
+                    est->covariance[k * ESTIMATOR_STATE_DIM + col];
+            }
+        }
+    }
+
+    for (int row = 0; row < ESTIMATOR_STATE_DIM; row++) {
+        for (int col = 0; col < ESTIMATOR_STATE_DIM; col++) {
+            for (int k = 0; k < ESTIMATOR_STATE_DIM; k++) {
+                predicted_covariance[row * ESTIMATOR_STATE_DIM + col] +=
+                    FP[row * ESTIMATOR_STATE_DIM + k] *
+                    F[col * ESTIMATOR_STATE_DIM + k];
+            }
+        }
+    }
+
+    const float accel_variance = est->accel_noise * est->accel_noise;
+    const float bias_variance = est->accel_bias_noise *
+                                est->accel_bias_noise * dt;
+    predicted_covariance[0] += 0.25f * dt2 * dt2 * accel_variance;
+    predicted_covariance[1] += 0.5f * dt2 * dt * accel_variance;
+    predicted_covariance[3] += 0.5f * dt2 * dt * accel_variance;
+    predicted_covariance[4] += dt2 * accel_variance;
+    predicted_covariance[8] += bias_variance;
+
+    memcpy(est->covariance, predicted_covariance,
+           sizeof(predicted_covariance));
+    Estimator_Symmetrize_Covariance(est->covariance);
+}
+
+static void Estimator_Update_WheelSpeed(Kalman_Observer_t *est,
+                                        const float wheel_speed,
+                                        const float dt)
+{
+    const float residual = wheel_speed - est->state[1];
+    const float slip_now = Estimator_Clamp(
+        (fabsf(residual) - est->slip_threshold) /
+        (est->slip_threshold + 1.0e-6f), 0.0f, 1.0f);
+    const float slip_alpha = Estimator_Clamp(dt / 0.15f, 0.0f, 1.0f);
+    est->slip_score += slip_alpha * (slip_now - est->slip_score);
+
+    const float measurement_variance =
+        est->wheel_speed_noise * est->wheel_speed_noise *
+        (1.0f + est->slip_gain * slip_now);
+    const float innovation_variance = est->covariance[4] +
+                                      measurement_variance;
+    if (innovation_variance <= ESTIMATOR_MIN_VARIANCE) {
+        return;
+    }
+
+    float gain[ESTIMATOR_STATE_DIM];
+    float velocity_covariance_row[ESTIMATOR_STATE_DIM];
+    for (int i = 0; i < ESTIMATOR_STATE_DIM; i++) {
+        gain[i] = est->covariance[i * ESTIMATOR_STATE_DIM + 1] /
+                  innovation_variance;
+        velocity_covariance_row[i] = est->covariance[3 + i];
+        est->state[i] += gain[i] * residual;
+    }
+
+    for (int row = 0; row < ESTIMATOR_STATE_DIM; row++) {
+        for (int col = 0; col < ESTIMATOR_STATE_DIM; col++) {
+            est->covariance[row * ESTIMATOR_STATE_DIM + col] -=
+                gain[row] * velocity_covariance_row[col];
+        }
+    }
+    Estimator_Symmetrize_Covariance(est->covariance);
+}
+
 /* ==================== Estimator ==================== */
-void Estimator_Leg_Init(Kalman_Observer_t *est) {
-    est->outstate.s = 0.0f;
-    est->outstate.dot_s = 0.0f;
-    est->last_wheel_distance = 0.0f;
-    est->last_wheel_speed = 0.0f;
-    est->wheel_speed_input = 0.0f;
-    // 初始化KF维度: 状态量x(2维: s, dot_s), 控制量u(1维: accel_x), 观测量z(2维: 轮速里程计的dot_s)
-    Kalman_Filter_Init(&est->kf, 3, 0, 2);
-    // 禁用自动调整，使用固定矩阵维度
-    est->kf.UseAutoAdjustment = 0;
-    // 配置状态观测矩阵 H: z = 0 * s + 1 * dot_s
-    // H 是 2x3
-    est->kf.H_data[0] = 0.0f;
-    est->kf.H_data[1] = 1.0f;   // z0 = dot_s，轮速
-    est->kf.H_data[2] = 0.0f;
+void Estimator_Leg_Init(Kalman_Observer_t *est)
+{
+    if (est == NULL) {
+        return;
+    }
 
-    est->kf.H_data[3] = 0.0f;
-    est->kf.H_data[4] = 0.0f;
-    est->kf.H_data[5] = 1.0f;   // z1 = ddot_s，IMU 加速度
-
-    // 配置过程噪声协方差矩阵 Q (2x2 对角阵，信任动力学模型程度)
-    est->kf.Q_data[0] = 0.01f;  // s 的过程噪声
-    est->kf.Q_data[4] = 0.05f;  // dot_s 的过程噪声
-    est->kf.Q_data[8] = 0.1f;
-
-    // 配置测量噪声协方差矩阵 R (2x2，信任轮式里程计的程度)
-    est->kf.R_data[0] = 0.005f;   // 轮位移测量噪声
-    est->kf.R_data[3] = 0.05f;
-
-    // 初始化误差协方差矩阵 P (3x3)
-    est->kf.P_data[0] = 1.0f;
-    est->kf.P_data[4] = 1.0f;
-    est->kf.P_data[8] = 1.0f;
-
-    // 初始化状态最小值限制防止过度收敛
-    est->kf.StateMinVariance[0] = 1e-4f;
-    est->kf.StateMinVariance[1] = 1e-4f;
-    est->kf.StateMinVariance[2] = 1e-4f;
+    memset(est, 0, sizeof(*est));
+    est->covariance[0] = 1.0f;
+    est->covariance[4] = 1.0f;
+    est->covariance[8] = 0.5f;
+    est->accel_noise = 0.32f;
+    est->accel_bias_noise = 0.05f;
+    est->wheel_speed_noise = 0.071f;
+    est->slip_threshold = 0.15f;
+    est->slip_gain = 20.0f;
 }
 
 void Estimator_Leg_Update(Kalman_Observer_t *est, float wheel_speed,
-                          const float imu_accel_x, const float dt) {
-    const float raw_dot_s = wheel_speed;
-    const float raw_ddot_s = imu_accel_x;
-    // 2. 动态更新状态转移矩阵 F (2x2) 行优先存储
-    // [ 1  dt ]
-    // [ 0  1  ]
-    est->kf.F_data[0] = 1.0f;
-    est->kf.F_data[1] = dt;
-    est->kf.F_data[2] = dt*dt*0.5f;
-    est->kf.F_data[3] = 0.0f;
-    est->kf.F_data[4] = 1.0f;
-    est->kf.F_data[5] = dt;
-    est->kf.F_data[6] = 0.0f;
-    est->kf.F_data[7] = 0.0f;
-    est->kf.F_data[8] = 1.0f;
+                          const float imu_accel_x, const float dt)
+{
+    if (est == NULL) {
+        return;
+    }
 
-    // 4. 装载控制量 U 和观测量 Z
-    est->kf.MeasuredVector[0] = raw_dot_s ; // 轮速里程计作为观测量
-    est->kf.MeasuredVector[1] = raw_ddot_s ; // IMU 加速度观测量
-    // 5. 执行滤波迭代
-    float* filtered_states = Kalman_Filter_Update(&est->kf);
-    // 6. 提取平滑后的状态
-    est->outstate.s = filtered_states[0];
-    est->outstate.dot_s = filtered_states[1];
+    const float valid_dt = Estimator_Clamp(dt, 1.0e-4f, 0.05f);
+    if (!est->initialized) {
+        est->state[1] = wheel_speed;
+        est->initialized = 1U;
+    }
+
+    Estimator_Predict(est, imu_accel_x, valid_dt);
+    Estimator_Update_WheelSpeed(est, wheel_speed, valid_dt);
+
+    est->last_wheel_speed = wheel_speed;
+    est->last_wheel_distance += wheel_speed * valid_dt;
+    est->outstate.s = est->state[0];
+    est->outstate.dot_s = est->state[1];
 }
 
 void Estimator_Set_WheelSpeed(Kalman_Observer_t *est, float wheel_speed)
@@ -81,14 +178,18 @@ void Estimator_Set_WheelSpeed(Kalman_Observer_t *est, float wheel_speed)
     }
 }
 
-void Estimator_QR_Change(Kalman_Observer_t *est,const float Q_data[4],const float R_data[1]) {
-    est->kf.Q_data[0] = Q_data[0];
-    est->kf.Q_data[1] = Q_data[1];
-    est->kf.Q_data[2] = Q_data[2];
-    est->kf.Q_data[3] = Q_data[3];
+void Estimator_QR_Change(Kalman_Observer_t *est,
+                         const float Q_data[4], const float R_data[1])
+{
+    if (est == NULL || Q_data == NULL || R_data == NULL) {
+        return;
+    }
 
-    est->kf.R_data[0] = R_data[0];
-
+    /* 保留原接口；Q[0] 调整加速度噪声，Q[3] 调整零偏随机游走。 */
+    est->accel_noise = sqrtf(fmaxf(Q_data[0], ESTIMATOR_MIN_VARIANCE));
+    est->accel_bias_noise = sqrtf(fmaxf(Q_data[3], ESTIMATOR_MIN_VARIANCE));
+    est->wheel_speed_noise = sqrtf(fmaxf(R_data[0],
+                                        ESTIMATOR_MIN_VARIANCE));
 }
 
 void Quat_Rotate_Vector(const float q[4], const float v[3], float out[3]) {
