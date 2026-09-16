@@ -96,6 +96,24 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "ACTIVE_APP": "1_Catapult_Hero"
             }
+        },
+        {
+            "name": "H723-5_Balance_leg_wheel_chassis-Debug",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/Boards/H723/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ACTIVE_APP": "5_Balance_leg_wheel_chassis"
+            }
+        },
+        {
+            "name": "H723-5_Balance_leg_wheel_chassis-Release",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/Boards/H723/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ACTIVE_APP": "5_Balance_leg_wheel_chassis"
+            }
         }
     ],
     "buildPresets": [
@@ -138,6 +156,14 @@
         {
             "name": "H723-1_Catapult_Hero-Release",
             "configurePreset": "H723-1_Catapult_Hero-Release"
+        },
+        {
+            "name": "H723-5_Balance_leg_wheel_chassis-Debug",
+            "configurePreset": "H723-5_Balance_leg_wheel_chassis-Debug"
+        },
+        {
+            "name": "H723-5_Balance_leg_wheel_chassis-Release",
+            "configurePreset": "H723-5_Balance_leg_wheel_chassis-Release"
         }
     ]
 }
