@@ -124,8 +124,7 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
     const float right_wheel_radps =
         RIGHT_WHEEL_SIGN * (float)c_motor->DJI_3508_Chassis[1].Speed_now
         * RPM_TO_RADS / WHEEL_GEAR_RATIO;
-    chassis_ctrl.wheel_speed_mps =
-        0.5f * WHEEL_RADIUS_M * (left_wheel_radps + right_wheel_radps);
+    chassis_ctrl.wheel_speed_mps = 0.5f * WHEEL_RADIUS_M * (left_wheel_radps + right_wheel_radps);
     Estimator_Set_WheelSpeed(&chassis_ctrl.odometry,
                              chassis_ctrl.wheel_speed_mps);
     if (imu != NULL) {
@@ -201,19 +200,21 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                     PID_Calculate(&chassis_ctrl.joint_vel[1],l_motor->BM_P1010B_Leg[1].vel_rad,chassis_ctrl.joint_pos[1].Output);
                     PID_Calculate(&chassis_ctrl.joint_vel[2],l_motor->BM_P1010B_Leg[2].vel_rad,chassis_ctrl.joint_pos[2].Output);
                     PID_Calculate(&chassis_ctrl.joint_vel[3],l_motor->BM_P1010B_Leg[3].vel_rad,chassis_ctrl.joint_pos[3].Output);
-                    BM_Send_torque(&hfdcan2, 0x032, chassis_ctrl.joint_vel[0].Output,
-                            chassis_ctrl.joint_vel[1].Output,
-                            chassis_ctrl.joint_vel[2].Output,
-                            chassis_ctrl.joint_vel[3].Output);
-                    DJI_Motor_Send(&hfdcan1,0x200,0,0,0,0);
+                    if (fabsf(imu->roll) < 5.0f) {
+                        BM_Send_torque(&hfdcan2, 0x032, chassis_ctrl.joint_vel[0].Output,
+                                chassis_ctrl.joint_vel[1].Output,
+                                chassis_ctrl.joint_vel[2].Output,
+                                chassis_ctrl.joint_vel[3].Output);
+                        DJI_Motor_Send(&hfdcan1,0x200,0,0,0,0);
+                    }
                     if (chassis_ctrl.vmc.left.theta[0] < 0.1f &&
                         chassis_ctrl.vmc.left.theta[0] > -0.05f &&
                         chassis_ctrl.vmc.right.theta[0] < 0.1f &&
                         chassis_ctrl.vmc.right.theta[0] > -0.05f &&
-                        fabsf(imu->pitch) < 10.0f &&
+                        fabsf(imu->pitch) < 12.0f &&
                         chassis_ctrl.vmc.left.length[0] < 0.17f &&
                         chassis_ctrl.vmc.right.length[0] < 0.17f &&
-                        chassis_ctrl.wheel_speed_mps < 0.03f) {
+                        fabsf(chassis_ctrl.wheel_speed_mps) < 0.03f) {
                         save_cnt ++;
                         Estimator_Leg_Init(&chassis_ctrl.odometry);
 
@@ -289,21 +290,8 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
     // }
     LESO_SetAppliedInput(&chassis_ctrl.leso, applied_input,
                          chassis_ctrl.lqr.u_eq);
-    VOFA_JustFloat(&huart1,19,
-        imu->accel[0],//x轴加速度
-        imu->accel[1],//y轴加速度
-        imu->accel[2],//z轴加速度
-        imu->gyro[0],//x轴角速度
-        imu->gyro[1],//y轴角速度
-        imu->gyro[2],//z轴角速度
-        -(float)c_motor->DJI_3508_Chassis[0].current,//左轮反馈转矩电流，单位mA
-        (float)c_motor->DJI_3508_Chassis[1].current,//右轮反馈转矩电流，单位mA
-        -(float)c_motor->DJI_3508_Chassis[0].Speed_now,//左轮反馈转速，单位RPM
-        (float)c_motor->DJI_3508_Chassis[1].Speed_now,//右轮反馈转速，单位RPM
-        chassis_ctrl.vmc.left.length[0],//左腿长
-        chassis_ctrl.vmc.right.length[0],//右腿长
-        chassis_ctrl.vmc.left.support_force,//左腿支撑力
-        chassis_ctrl.vmc.right.support_force//右腿支撑力
+    VOFA_JustFloat(&huart1,2,
+        chassis_ctrl.wheel_speed_mps
         );
 }
 
