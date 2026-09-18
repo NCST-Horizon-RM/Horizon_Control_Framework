@@ -23,15 +23,20 @@ typedef struct {
     float body_velocity_mps;
     LQR_Control_t lqr;
     LESO_Control_t leso;
-    PID_t left_length_pos;
-    PID_t left_length_vel;
-    PID_t right_length_pos;
-    PID_t right_length_vel;
-    PID_t roll;
     PID_t joint_pos[4];
     PID_t joint_vel[4];
+    float body_height_m;
+    float body_height_rate_mps;
+    float limited_height_target_m;
+    float lateral_acceleration_mps2;
+    float roll_lean_target_rad;
+    float effective_roll_target_rad;
+    float total_vertical_force_n;
+    float roll_moment_nm;
     float left_leg_force_n;
     float right_leg_force_n;
+    float last_left_leg_force_n;
+    float last_right_leg_force_n;
     bool stand_initialized;
 } Chassis_Ctrl_Block_t;
 

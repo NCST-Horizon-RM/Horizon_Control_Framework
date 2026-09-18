@@ -1,14 +1,14 @@
 //
-// Created by qza on 2026/7/17.
+// Created by CaoKangqi on 2026/9/14.
 //
 
 #include "Kalman_Observer.h"
-#include "All_define.h"
 #include <math.h>
 #include <string.h>
 
 #define ESTIMATOR_STATE_DIM 3
 #define ESTIMATOR_MIN_VARIANCE 1.0e-6f
+#define ESTIMATOR_DEFAULT_HALF_TRACK_M 0.20f
 
 static float Estimator_Clamp(const float value, const float min_value,
                              const float max_value)
@@ -93,42 +93,86 @@ static void Estimator_Predict(Kalman_Observer_t *est,
     Estimator_Symmetrize_Covariance(est->covariance);
 }
 
-static void Estimator_Update_WheelSpeed(Kalman_Observer_t *est,
-                                        const float wheel_speed,
-                                        const float dt)
+static float Estimator_Update_WheelSpeeds(Kalman_Observer_t *est,
+                                          const float left_wheel_speed,
+                                          const float right_wheel_speed,
+                                          const float imu_yaw_rate,
+                                          const float dt)
 {
-    const float residual = wheel_speed - est->state[1];
-    const float slip_now = Estimator_Clamp(
-        (fabsf(residual) - est->slip_threshold) /
+    const float predicted_speed = est->state[1];
+    const float vx_wheel = est->vx_wheel;
+    const float vw_wheel = est->vw_wheel;
+    const float left_expected_speed = predicted_speed -
+        imu_yaw_rate * est->wheel_half_track_m;
+    const float right_expected_speed = predicted_speed +
+        imu_yaw_rate * est->wheel_half_track_m;
+    const float left_residual = left_wheel_speed - left_expected_speed;
+    const float right_residual = right_wheel_speed - right_expected_speed;
+    const float yaw_residual = vw_wheel - imu_yaw_rate;
+
+    est->vx_wheel = vx_wheel;
+    est->vw_wheel = vw_wheel;
+
+    const float left_slip_now = Estimator_Clamp(
+        (fabsf(left_residual) - est->slip_threshold) /
         (est->slip_threshold + 1.0e-6f), 0.0f, 1.0f);
-    const float slip_alpha = Estimator_Clamp(dt / 0.15f, 0.0f, 1.0f);
-    est->slip_score += slip_alpha * (slip_now - est->slip_score);
+    const float right_slip_now = Estimator_Clamp(
+        (fabsf(right_residual) - est->slip_threshold) /
+        (est->slip_threshold + 1.0e-6f), 0.0f, 1.0f);
+    const float slip_now = 0.5f * (left_slip_now + right_slip_now);
+    const float yaw_now = Estimator_Clamp(
+        (fabsf(yaw_residual) - est->yaw_consistency_threshold) /
+        (est->yaw_consistency_threshold + 1.0e-6f), 0.0f, 1.0f);
+    const float slip_alpha = Estimator_Clamp(dt / 0.25f, 0.0f, 1.0f);
+    est->longitudinal_slip_score += slip_alpha *
+                                    (slip_now - est->longitudinal_slip_score);
+    est->left_slip_score += slip_alpha *
+                            (left_slip_now - est->left_slip_score);
+    est->right_slip_score += slip_alpha *
+                             (right_slip_now - est->right_slip_score);
+    est->yaw_consistency_score += slip_alpha *
+                                  (yaw_now - est->yaw_consistency_score);
 
-    const float measurement_variance =
+    /* 一致时融合轮速和陀螺仪；不一致时逐渐只信任陀螺仪。 */
+    const float wheel_yaw_weight = 0.5f * (1.0f - yaw_now);
+    const float vw_measurement = wheel_yaw_weight * vw_wheel +
+        (1.0f - wheel_yaw_weight) * imu_yaw_rate;
+    const float yaw_alpha = Estimator_Clamp(dt / 0.05f, 0.0f, 1.0f);
+    est->vw_estimate += yaw_alpha * (vw_measurement - est->vw_estimate);
+
+    const float measurement_variance_left =
         est->wheel_speed_noise * est->wheel_speed_noise *
-        (1.0f + est->slip_gain * slip_now);
-    const float innovation_variance = est->covariance[4] +
-                                      measurement_variance;
-    if (innovation_variance <= ESTIMATOR_MIN_VARIANCE) {
-        return;
-    }
-
-    float gain[ESTIMATOR_STATE_DIM];
-    float velocity_covariance_row[ESTIMATOR_STATE_DIM];
-    for (int i = 0; i < ESTIMATOR_STATE_DIM; i++) {
-        gain[i] = est->covariance[i * ESTIMATOR_STATE_DIM + 1] /
-                  innovation_variance;
-        velocity_covariance_row[i] = est->covariance[3 + i];
-        est->state[i] += gain[i] * residual;
-    }
-
-    for (int row = 0; row < ESTIMATOR_STATE_DIM; row++) {
-        for (int col = 0; col < ESTIMATOR_STATE_DIM; col++) {
-            est->covariance[row * ESTIMATOR_STATE_DIM + col] -=
-                gain[row] * velocity_covariance_row[col];
+        (1.0f + est->slip_gain * left_slip_now);
+    const float measurement_variance_right =
+        est->wheel_speed_noise * est->wheel_speed_noise *
+        (1.0f + est->slip_gain * right_slip_now);
+    const float innovation_left = est->covariance[4] +
+                                  measurement_variance_left;
+    const float innovation_right = est->covariance[4] +
+                                   measurement_variance_right;
+    const float residuals[2] = {left_residual, right_residual};
+    const float innovations[2] = {innovation_left, innovation_right};
+    for (int measurement = 0; measurement < 2; measurement++) {
+        if (innovations[measurement] <= ESTIMATOR_MIN_VARIANCE) {
+            continue;
         }
+        float gain[ESTIMATOR_STATE_DIM];
+        float velocity_covariance_row[ESTIMATOR_STATE_DIM];
+        for (int i = 0; i < ESTIMATOR_STATE_DIM; i++) {
+            gain[i] = est->covariance[i * ESTIMATOR_STATE_DIM + 1] /
+                      innovations[measurement];
+            velocity_covariance_row[i] = est->covariance[3 + i];
+            est->state[i] += gain[i] * residuals[measurement];
+        }
+        for (int row = 0; row < ESTIMATOR_STATE_DIM; row++) {
+            for (int col = 0; col < ESTIMATOR_STATE_DIM; col++) {
+                est->covariance[row * ESTIMATOR_STATE_DIM + col] -=
+                    gain[row] * velocity_covariance_row[col];
+            }
+        }
+        Estimator_Symmetrize_Covariance(est->covariance);
     }
-    Estimator_Symmetrize_Covariance(est->covariance);
+    return vx_wheel;
 }
 
 /* ==================== Estimator ==================== */
@@ -145,36 +189,65 @@ void Estimator_Leg_Init(Kalman_Observer_t *est)
     est->accel_noise = 0.32f;
     est->accel_bias_noise = 0.05f;
     est->wheel_speed_noise = 0.071f;
-    est->slip_threshold = 0.15f;
+    est->slip_threshold = 0.35f;
     est->slip_gain = 20.0f;
+    est->yaw_consistency_threshold = 0.50f;
+    est->wheel_half_track_m = ESTIMATOR_DEFAULT_HALF_TRACK_M;
 }
 
-void Estimator_Leg_Update(Kalman_Observer_t *est, float wheel_speed,
-                          const float imu_accel_x, const float dt)
+void Estimator_Leg_Update(Kalman_Observer_t *est,
+                          const float left_wheel_speed,
+                          const float right_wheel_speed,
+                          const float imu_accel_x,
+                          const float imu_yaw_rate,
+                          const float dt)
 {
     if (est == NULL) {
         return;
     }
 
     const float valid_dt = Estimator_Clamp(dt, 1.0e-4f, 0.05f);
+    const float center_wheel_speed =
+        0.5f * (left_wheel_speed + right_wheel_speed);
     if (!est->initialized) {
-        est->state[1] = wheel_speed;
+        est->state[1] = center_wheel_speed;
         est->initialized = 1U;
     }
 
     Estimator_Predict(est, imu_accel_x, valid_dt);
-    Estimator_Update_WheelSpeed(est, wheel_speed, valid_dt);
+    const float fused_wheel_speed = Estimator_Update_WheelSpeeds(
+        est, left_wheel_speed, right_wheel_speed, imu_yaw_rate, valid_dt);
 
-    est->last_wheel_speed = wheel_speed;
-    est->last_wheel_distance += wheel_speed * valid_dt;
+    est->last_wheel_speed = fused_wheel_speed;
+    est->last_wheel_distance += fused_wheel_speed * valid_dt;
     est->outstate.s = est->state[0];
     est->outstate.dot_s = est->state[1];
 }
 
-void Estimator_Set_WheelSpeed(Kalman_Observer_t *est, float wheel_speed)
+void Estimator_Set_WheelSpeeds(Kalman_Observer_t *est,
+                               const float left_wheel_speed,
+                               const float right_wheel_speed)
 {
     if (est != NULL) {
-        est->wheel_speed_input = wheel_speed;
+        est->left_wheel_speed_input = left_wheel_speed;
+        est->right_wheel_speed_input = right_wheel_speed;
+        est->vx_wheel = 0.5f * (left_wheel_speed + right_wheel_speed);
+        est->vw_wheel = (est->wheel_half_track_m > 1.0e-4f) ?
+            (right_wheel_speed - left_wheel_speed) /
+            (2.0f * est->wheel_half_track_m) : 0.0f;
+    }
+}
+
+void Estimator_Set_WheelHalfTrack(Kalman_Observer_t *est,
+                                  const float wheel_half_track_m)
+{
+    if (est != NULL && wheel_half_track_m >= 0.0f) {
+        est->wheel_half_track_m = wheel_half_track_m;
+        if (est->wheel_half_track_m > 1.0e-4f) {
+            est->vw_wheel = (est->right_wheel_speed_input -
+                             est->left_wheel_speed_input) /
+                            (2.0f * est->wheel_half_track_m);
+        }
     }
 }
 
@@ -264,5 +337,7 @@ void Estimator_Task(Kalman_Observer_t *est, const IMU_Data_t imu_data, const flo
     Decompose_Acceleration(imu_data.accel,imu_data.q, g_world,
     acc_motion_world,acc_motion_body);
     float imu_accel_x = Forward_Acc_XZ(imu_data.q,acc_motion_world);
-    Estimator_Leg_Update(est, est->wheel_speed_input, imu_accel_x, dt);
+    Estimator_Leg_Update(est, est->left_wheel_speed_input,
+                         est->right_wheel_speed_input, imu_accel_x,
+                         imu_data.gyro[2], dt);
 }

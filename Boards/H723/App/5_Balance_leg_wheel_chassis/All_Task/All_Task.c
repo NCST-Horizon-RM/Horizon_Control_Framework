@@ -99,7 +99,7 @@ void StartTask01(void *argument)
         BM_EnableDisable(&hfdcan2, 0x02);
         Chassis_Control_Task(&chassis_motors,&leg_motors, &IMU_Data, TASK1_Period_S);
         DWT_Profile_Stop(&TASK1_Profiler);
-        //VOFA_JustFloat(&huart1,2,TASK1_Profiler.cost_us,0.0f);
+        VOFA_JustFloat(&huart1,2,TASK1_Profiler.cost_us,0.0f);
     }
 }
 

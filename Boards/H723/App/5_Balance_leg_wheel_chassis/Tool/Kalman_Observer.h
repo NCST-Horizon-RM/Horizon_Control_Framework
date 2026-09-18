@@ -1,7 +1,6 @@
 //
-// Created by qza on 2026/7/17.
+// Created by CaoKangqi on 2026/9/14.
 //
-
 #ifndef H7_FRAMEWORK_KALMAN_OBSERVER_H
 #define H7_FRAMEWORK_KALMAN_OBSERVER_H
 
@@ -22,19 +21,33 @@ typedef struct {
     float wheel_speed_noise;
     float slip_threshold;
     float slip_gain;
-    float slip_score;
+    float wheel_half_track_m;
+    float yaw_consistency_threshold;
+    float longitudinal_slip_score; // vx_wheel 与纵向预测速度的异常评分
+    float yaw_consistency_score;    // vw_wheel 与 gyro_z 的不一致评分
+    float left_slip_score;
+    float right_slip_score;
     unsigned char initialized;
     float last_wheel_distance;
     float last_wheel_speed;
-    float wheel_speed_input;
+    float left_wheel_speed_input;
+    float right_wheel_speed_input;
+    float vx_wheel;
+    float vw_wheel;
+    float vw_estimate;
     Estimator_OutState_t outstate;
 } Kalman_Observer_t;
 
 void Estimator_Leg_Init(Kalman_Observer_t *est);
-void Estimator_Leg_Update(Kalman_Observer_t *est, float wheel_speed,
-                          float imu_accel_x, float dt);
+void Estimator_Leg_Update(Kalman_Observer_t *est,
+                          float left_wheel_speed, float right_wheel_speed,
+                          float imu_accel_x, float imu_yaw_rate, float dt);
 void Estimator_Task(Kalman_Observer_t *est, IMU_Data_t imu_data, float dt);
-void Estimator_Set_WheelSpeed(Kalman_Observer_t *est, float wheel_speed);
+void Estimator_Set_WheelSpeeds(Kalman_Observer_t *est,
+                               float left_wheel_speed,
+                               float right_wheel_speed);
+void Estimator_Set_WheelHalfTrack(Kalman_Observer_t *est,
+                                  float wheel_half_track_m);
 void Estimator_QR_Change(Kalman_Observer_t *est,
                          const float Q_data[4], const float R_data[1]);
 

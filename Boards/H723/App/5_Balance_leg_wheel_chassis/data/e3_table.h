@@ -3,7 +3,7 @@
 #include "k_table_2d.h"
 
 static const float e3_coeff[5] = {
-    -23.86649766f, 25.14500898f, -10.07633311f, 2.01235870f, -0.19347085f
+    -25.95248518f, 26.99365680f, -10.63632856f, 2.08213468f, -0.19642741f
 };
 
 static inline float e3_eval(float length) {

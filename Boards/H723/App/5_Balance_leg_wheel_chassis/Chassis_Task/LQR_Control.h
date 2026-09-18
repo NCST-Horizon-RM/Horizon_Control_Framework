@@ -8,7 +8,7 @@
 
 #define LQR_STATE_SIZE 10
 #define LQR_OUTPUT_SIZE 4
-#define LESO_COMPENSATION_SCALE 0.5f
+#define LESO_COMPENSATION_SCALE 1.0f
 
 typedef struct {
     float position_m;

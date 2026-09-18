@@ -11,7 +11,6 @@
 typedef enum {
     CHASSIS_CMD_SAFE = 0,    // 安全锁死，无输出
     CHASSIS_CMD_FOLLOW,      // 底盘跟随云台
-    CHASSIS_CMD_FREE,        // 底盘与云台分离
     CHASSIS_CMD_SPIN         // 小陀螺模式
 } Chassis_Mode_e;
 
