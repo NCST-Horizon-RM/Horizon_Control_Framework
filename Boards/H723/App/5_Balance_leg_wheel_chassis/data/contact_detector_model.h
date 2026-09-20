@@ -1,0 +1,9 @@
+/* Auto-generated contact detector model. */
+#pragma once
+
+#define CONTACT_FEATURE_COUNT 12
+
+static const float contact_feature_mean[CONTACT_FEATURE_COUNT] = {-4.009533653e+01f, -6.221469158e-01f, 1.473216181e-01f, -1.159641158e-03f, 4.800828256e-01f, 0.000000000e+00f, 1.451277288e-01f, 9.664177450e-01f, 2.753487573e-01f, -1.831633924e-04f, 0.000000000e+00f, 9.652189254e+00f};
+static const float contact_feature_scale[CONTACT_FEATURE_COUNT] = {4.187554751e+01f, 1.896105145e+00f, 2.150690916e-01f, 6.928791242e-01f, 1.393343530e+00f, 1.000000000e+00f, 2.092502690e-01f, 3.448201585e-02f, 7.518498951e-02f, 5.450872010e-02f, 1.000000000e+00f, 9.524577313e-01f};
+static const float contact_model_weights[CONTACT_FEATURE_COUNT + 1] = {3.638235704e-03f, -1.969629920e+00f, 5.401290131e-01f, 2.802415659e-01f, 1.443323795e-01f, -3.733147713e-01f, 0.000000000e+00f, 2.926085269e-01f, 3.815771349e-01f, -1.634372336e+00f, -4.967042627e-02f, 0.000000000e+00f, -5.132601705e-02f};
+static const float contact_model_bias = contact_model_weights[0];

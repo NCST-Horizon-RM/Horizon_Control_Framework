@@ -26,6 +26,7 @@ typedef struct {
     float offset_angle;     // 云台与底盘的相对夹角
     bool is_collect;        // 是否开始采集数据
     bool is_cap_on;
+    bool jump;      // S1 上拨时请求一次起跳
 } Chassis_Cmd_t;
 
 // 台控制指令

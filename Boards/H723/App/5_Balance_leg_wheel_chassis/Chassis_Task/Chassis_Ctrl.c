@@ -19,29 +19,15 @@
 #define WHEEL_HALF_TRACK_M                0.20f   // 半轮距，用于ROLL力矩与左右支撑力差换算
 #define LEFT_WHEEL_SIGN                  -1.0f    // 左轮速度反馈方向修正
 #define RIGHT_WHEEL_SIGN                  1.0f    // 右轮速度反馈方向修正
-#define BODY_MASS_KG                     17.5f    // 参与高度和ROLL动力学计算的整车质量
-#define GRAVITY_MPS2                     9.81f    // 重力加速度
 #define NM_ENCODER                       (1.0f/(0.315f*20.0f)*16384.0f) // 轮电机力矩到电流指令的换算系数
 #define LESO_ENABLE                       1       // LESO补偿使能开关
-
-#define HEIGHT_NATURAL_FREQ_HZ            2.0f   // 高度闭环自然频率
-#define HEIGHT_DAMPING_RATIO              0.7f   // 高度闭环阻尼比
-#define ROLL_NATURAL_FREQ_HZ              4.0f   // ROLL闭环自然频率
-#define ROLL_DAMPING_RATIO                0.4f  // ROLL闭环阻尼比
-#define BODY_ROLL_INERTIA_KGM2            0.36f  // 机身绕质心ROLL轴的转动惯量
-#define BODY_COM_OFFSET_FROM_HIP_M        0.0f   // 质心相对髋部的竖直偏移，向上为正
-#define LEG_AXIAL_FORCE_MAX_N           250.0f   // 单腿允许输出的最大轴向力
-#define LEG_FORCE_RATE_LIMIT_NPS       2500.0f   // 单腿轴向力每秒最大变化量
-#define LEG_VERTICAL_COS_MIN              0.35f  // 腿轴向力转竖直力时的最小余弦保护值
-#define LEG_THEORETICAL_MAX_LENGTH_M      0.33f  // 虚拟腿理论最大长度，用于动态限制机身高度
-
-#define CENTRIPETAL_LPF_HZ                4.0f   // 向心加速度低通滤波截止频率
-#define CENTRIPETAL_ACCEL_LIMIT_MPS2     5.0f   // 允许参与补偿的最大向心加速度
-#define ROLL_LEAN_SIGN                   -1.0f   // 主动内倾方向与IMU ROLL正方向的对应关系
-#define ROLL_LEAN_LIMIT_RAD              (9.0f * DEG2RAD) // 主动压弯允许的最大ROLL倾角
+#define JUMP_THRUST_FORCE_N               500.0f
+#define JUMP_RETRACT_LENGTH_M             0.17f
+#define JUMP_RETRACT_COMPLETE_TOL_M       0.003f
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
 static uint16_t save_cnt = 0;
+static uint16_t jump_cnt = 0;
 Chassis_Control_Mode_t MODE;
 
 //功率控制
@@ -49,173 +35,33 @@ static Motor_Power_State_t m_states[2];//底盘共4个电机
 static Power_Motion_Node_t motion_nodes[2];          /**< 四轮模型、运动电流分量及电流上限。 */
 static Power_Motion_Result_t chassis_power_result;   /**< 本周期保留比例、功率预测和分配状态。 */
 
-static float clamp_float(float value, float lower, float upper)
-{
-    return fminf(fmaxf(value, lower), upper);
-}
-
-static float rate_limit_float(float target, float previous, float max_step)
-{
-    return previous + clamp_float(target - previous, -max_step, max_step);
-}
-
 static void Chassis_ResetSupportController(void)
 {
-    chassis_ctrl.body_height_m = 0.0f;
-    chassis_ctrl.body_height_rate_mps = 0.0f;
-    chassis_ctrl.limited_height_target_m = 0.0f;
-    chassis_ctrl.lateral_acceleration_mps2 = 0.0f;
-    chassis_ctrl.roll_lean_target_rad = 0.0f;
-    chassis_ctrl.effective_roll_target_rad = 0.0f;
-    chassis_ctrl.total_vertical_force_n = 0.0f;
-    chassis_ctrl.roll_moment_nm = 0.0f;
-    chassis_ctrl.left_leg_force_n = 0.0f;
-    chassis_ctrl.right_leg_force_n = 0.0f;
-    chassis_ctrl.last_left_leg_force_n = 0.0f;
-    chassis_ctrl.last_right_leg_force_n = 0.0f;
+    Body_Support_Reset(&chassis_ctrl.support);
 }
 
 static void Chassis_UpdateSupportForces(const IMU_Data_t *imu, float dt)
 {
-    if (imu == NULL) {
-        Chassis_ResetSupportController();
-        return;
-    }
+    Body_Support_Update(&chassis_ctrl.support,
+                        &chassis_ctrl.vmc,
+                        imu,
+                        chassis_cmd.target_length,
+                        chassis_cmd.target_roll,
+                        chassis_ctrl.odometry.outstate.dot_s,
+                        dt);
+}
 
-    const float left_theta = chassis_ctrl.vmc.left.theta[0];
-    const float right_theta = chassis_ctrl.vmc.right.theta[0];
-    const float left_length = chassis_ctrl.vmc.left.length[0];
-    const float right_length = chassis_ctrl.vmc.right.length[0];
-    const float left_cos_raw = cosf(left_theta);
-    const float right_cos_raw = cosf(right_theta);
-    const float left_cos = fmaxf(left_cos_raw, LEG_VERTICAL_COS_MIN);
-    const float right_cos = fmaxf(right_cos_raw, LEG_VERTICAL_COS_MIN);
-    const float safe_dt = clamp_float(dt, 0.0f, 0.01f);
-
-    const float left_height = left_length * left_cos_raw;
-    const float right_height = right_length * right_cos_raw;
-    const float left_height_rate =
-        chassis_ctrl.vmc.left.length[1] * left_cos_raw
-        - left_length * sinf(left_theta) * chassis_ctrl.vmc.left.theta[1];
-    const float right_height_rate =
-        chassis_ctrl.vmc.right.length[1] * right_cos_raw
-        - right_length * sinf(right_theta) * chassis_ctrl.vmc.right.theta[1];
-
-    chassis_ctrl.body_height_m = 0.5f * (left_height + right_height);
-    chassis_ctrl.body_height_rate_mps =
-        0.5f * (left_height_rate + right_height_rate);
-
-    const float maximum_body_height = 0.5f
-        * LEG_THEORETICAL_MAX_LENGTH_M
-        * (fmaxf(left_cos_raw, 0.0f) + fmaxf(right_cos_raw, 0.0f));
-    chassis_ctrl.limited_height_target_m = fminf(
-        chassis_cmd.target_length,
-        maximum_body_height);
-    const float height_error =
-        chassis_ctrl.limited_height_target_m - chassis_ctrl.body_height_m;
-    const float height_natural_frequency =
-        6.283185307f * HEIGHT_NATURAL_FREQ_HZ;
-    const float height_acceleration_command =
-        height_natural_frequency * height_natural_frequency * height_error
-        - 2.0f * HEIGHT_DAMPING_RATIO * height_natural_frequency
-        * chassis_ctrl.body_height_rate_mps;
-    float total_vertical_force = BODY_MASS_KG * GRAVITY_MPS2
-        + BODY_MASS_KG * height_acceleration_command;
-
-    const float left_vertical_min = 0.0f;
-    const float right_vertical_min = 0.0f;
-    const float left_vertical_max = LEG_AXIAL_FORCE_MAX_N * left_cos;
-    const float right_vertical_max = LEG_AXIAL_FORCE_MAX_N * right_cos;
-    total_vertical_force = clamp_float(
-        total_vertical_force,
-        left_vertical_min + right_vertical_min,
-        left_vertical_max + right_vertical_max);
-
-    const float forward_speed = chassis_ctrl.odometry.outstate.dot_s;
-    const float yaw_rate = imu->gyro[2];
-    const float lateral_acceleration_raw = clamp_float(
-        forward_speed * yaw_rate,
-        -CENTRIPETAL_ACCEL_LIMIT_MPS2,
-        CENTRIPETAL_ACCEL_LIMIT_MPS2);
-    const float filter_omega_dt =
-        6.283185307f * CENTRIPETAL_LPF_HZ * safe_dt;
-    const float filter_alpha = (filter_omega_dt > 0.0f)
-        ? filter_omega_dt / (1.0f + filter_omega_dt)
-        : 0.0f;
-    chassis_ctrl.lateral_acceleration_mps2 += filter_alpha
-        * (lateral_acceleration_raw
-           - chassis_ctrl.lateral_acceleration_mps2);
-
-    float roll_lean_target = ROLL_LEAN_SIGN
-        * atanf(chassis_ctrl.lateral_acceleration_mps2 / GRAVITY_MPS2);
-    roll_lean_target = clamp_float(roll_lean_target,
-                                   -ROLL_LEAN_LIMIT_RAD,
-                                   ROLL_LEAN_LIMIT_RAD);
-    chassis_ctrl.roll_lean_target_rad = roll_lean_target;
-    chassis_ctrl.effective_roll_target_rad =
-        chassis_cmd.target_roll + chassis_ctrl.roll_lean_target_rad;
-
-    const float roll_angle = imu->roll * DEG2RAD;
-    const float roll_error = chassis_ctrl.effective_roll_target_rad
-        - roll_angle;
-    const float roll_natural_frequency =
-        6.283185307f * ROLL_NATURAL_FREQ_HZ;
-    const float roll_acceleration_command =
-        roll_natural_frequency * roll_natural_frequency * roll_error
-        - 2.0f * ROLL_DAMPING_RATIO * roll_natural_frequency
-        * imu->gyro[0];
-    const float body_com_height = fmaxf(
-        WHEEL_RADIUS_M + chassis_ctrl.body_height_m
-        + BODY_COM_OFFSET_FROM_HIP_M,
-        WHEEL_RADIUS_M);
-    const float effective_roll_inertia = BODY_ROLL_INERTIA_KGM2;
-    const float roll_lateral_acceleration = ROLL_LEAN_SIGN
-        * chassis_ctrl.lateral_acceleration_mps2;
-    const float centripetal_moment = BODY_MASS_KG * body_com_height * roll_lateral_acceleration;
-    const float centripetal_gravity_moment = BODY_MASS_KG * body_com_height
-        * (roll_lateral_acceleration * cosf(roll_angle)
-           - GRAVITY_MPS2 * sinf(roll_angle));
-    const float roll_moment = effective_roll_inertia * roll_acceleration_command + centripetal_moment;
-    float vertical_force_difference = roll_moment / WHEEL_HALF_TRACK_M;
-    const float difference_min = fmaxf(
-        2.0f * left_vertical_min - total_vertical_force,
-        total_vertical_force - 2.0f * right_vertical_max);
-    const float difference_max = fminf(
-        2.0f * left_vertical_max - total_vertical_force,
-        total_vertical_force - 2.0f * right_vertical_min);
-    vertical_force_difference = clamp_float(vertical_force_difference,
-                                            difference_min,
-                                            difference_max);
-
-    const float left_vertical_force =
-        0.5f * (total_vertical_force + vertical_force_difference);
-    const float right_vertical_force =
-        0.5f * (total_vertical_force - vertical_force_difference);
-    float left_axial_force = clamp_float(left_vertical_force / left_cos,
-                                         0.0f,
-                                         LEG_AXIAL_FORCE_MAX_N);
-    float right_axial_force = clamp_float(right_vertical_force / right_cos,
-                                          0.0f,
-                                          LEG_AXIAL_FORCE_MAX_N);
-
-    const float max_force_step = LEG_FORCE_RATE_LIMIT_NPS * safe_dt;
-    left_axial_force = rate_limit_float(left_axial_force,
-                                        chassis_ctrl.last_left_leg_force_n,
-                                        max_force_step);
-    right_axial_force = rate_limit_float(right_axial_force,
-                                         chassis_ctrl.last_right_leg_force_n,
-                                         max_force_step);
-
-    const float applied_left_vertical_force = left_axial_force * left_cos;
-    const float applied_right_vertical_force = right_axial_force * right_cos;
-    chassis_ctrl.total_vertical_force_n =
-        applied_left_vertical_force + applied_right_vertical_force;
-    chassis_ctrl.roll_moment_nm = WHEEL_HALF_TRACK_M
-        * (applied_left_vertical_force - applied_right_vertical_force);
-    chassis_ctrl.left_leg_force_n = left_axial_force;
-    chassis_ctrl.right_leg_force_n = right_axial_force;
-    chassis_ctrl.last_left_leg_force_n = left_axial_force;
-    chassis_ctrl.last_right_leg_force_n = right_axial_force;
+static void Chassis_UpdateSupportForcesToLength(const IMU_Data_t *imu,
+                                                float target_length,
+                                                float dt)
+{
+    Body_Support_Update(&chassis_ctrl.support,
+                        &chassis_ctrl.vmc,
+                        imu,
+                        target_length,
+                        chassis_cmd.target_roll,
+                        chassis_ctrl.odometry.outstate.dot_s,
+                        dt);
 }
 
 static float Chassis_Power_Arbitrator(float base_power_limit,
@@ -234,12 +80,14 @@ uint8_t Chassis_Control_Init()
                                  WHEEL_HALF_TRACK_M);
     LQR_Init(&chassis_ctrl.lqr);
     LESO_Init(&chassis_ctrl.leso);
-    Chassis_ResetSupportController();
+    Body_Support_Init(&chassis_ctrl.support);
+    Contact_Detector_Init(&chassis_ctrl.contact_left,0);
+    Contact_Detector_Init(&chassis_ctrl.contact_right,0);
 
-    float pid_joint_pos[3] = {6.0f, 0.0f, 0.0f};
+    float pid_joint_pos[3] = {8.0f, 0.0f, 0.0f};
     float pid_joint_vel[3] = {12.0f, 0.0f, 0.0f};
     for (int i = 0; i < 4; i++) {
-        PID_Init(&chassis_ctrl.joint_pos[i], 3.0f, 0.0f,
+        PID_Init(&chassis_ctrl.joint_pos[i], 3.5f, 0.0f,
             pid_joint_pos, 0, 0, 0, 0, 0, 0);
         PID_Init(&chassis_ctrl.joint_vel[i], 6.0f, 0.0f,
             pid_joint_vel, 0, 0, 0, 0, 0, 0);
@@ -318,6 +166,9 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                               left_wheel_speed_mps,
                               right_wheel_speed_mps);
     Buffer_Calc(&Meter,dt,50);
+    Contact_Detector_Update(&chassis_ctrl.contact_left, &chassis_ctrl.vmc.left, imu->accel[2]);
+    Contact_Detector_Update(&chassis_ctrl.contact_right, &chassis_ctrl.vmc.right, imu->accel[2]);
+
     chassis_ctrl.body_position_m = chassis_ctrl.odometry.outstate.s;
     chassis_ctrl.body_velocity_mps = chassis_ctrl.odometry.outstate.dot_s;
     if (!Is_Group_Online(CHASSIS)) {
@@ -371,7 +222,7 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                         Estimator_Leg_Init(&chassis_ctrl.odometry);
 
                         if (save_cnt >= 50) {
-                            chassis_cmd.target_length = 0.17f;
+                            chassis_cmd.target_length = 0.16f;
                             MODE = CTRL_STAND;
                             save_cnt = 0;
                         }
@@ -399,7 +250,7 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                             LESO_Init(&chassis_ctrl.leso);
 
                             // 同步目标位置和偏航，避免 x_ref 突变
-                            chassis_ctrl.lqr.target.position_m = chassis_ctrl.odometry.outstate.s + 3.7f;
+                            chassis_ctrl.lqr.target.position_m = chassis_ctrl.odometry.outstate.s + 1.9f;
                             chassis_ctrl.lqr.target.yaw_rad = imu->YawTotalAngle * DEG2RAD;
                             chassis_ctrl.lqr.target.velocity_mps = 0.0f;
                             chassis_ctrl.lqr.target.yaw_rate_radps = 0.0f;
@@ -419,11 +270,11 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                         chassis_ctrl.lqr.u[3] = MATH_Limit_float(chassis_ctrl.lqr.u[3], -6, 6);
                         Chassis_UpdateSupportForces(imu, dt);
                         VMC_ForceToTorque(chassis_ctrl.vmc.JRM_l,
-                                          chassis_ctrl.left_leg_force_n,
+                                          chassis_ctrl.support.left_leg_force_n,
                                           chassis_ctrl.lqr.u[0],
                                           &chassis_ctrl.vmc.left);
                         VMC_ForceToTorque(chassis_ctrl.vmc.JRM_r,
-                                          chassis_ctrl.right_leg_force_n,
+                                          chassis_ctrl.support.right_leg_force_n,
                                           chassis_ctrl.lqr.u[1],
                                           &chassis_ctrl.vmc.right);
                         BM_Send_torque(&hfdcan2, 0x032, chassis_ctrl.vmc.left.Tp_front,
@@ -451,7 +302,7 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                         }
                         else {
                             final_limit = Chassis_Power_Arbitrator(
-                                                    500,Meter.buffer_energy,
+                                                    5000.0f,Meter.buffer_energy,
                                                     1, &cap, &trigger_discharge, &cap_board_limit);
                         }
                         if (final_limit < 0.0f) final_limit = 0.0f;
@@ -473,8 +324,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                     }
                     break;
                 case CTRL_JUMP:
-                    Chassis_ResetSupportController();
-                    // Handle jump mode
                     break;
                 default:break;
             }
@@ -482,7 +331,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
     }
     LESO_SetAppliedInput(&chassis_ctrl.leso, applied_input,
                          chassis_ctrl.lqr.u_eq);
-    if (chassis_cmd.is_collect) {
         VOFA_JustFloat(&huart1, 11,
             chassis_ctrl.vmc.left.support_force,
             chassis_ctrl.vmc.left.support_torque,
@@ -493,15 +341,14 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
             chassis_ctrl.vmc.left.length[1],
             chassis_ctrl.vmc.left.length[2],
             imu->accel[2],
-            Meter.power,
-            Meter.buffer_energy);
-    }
+            (float)chassis_ctrl.contact_left.is_contact,
+            (float)chassis_ctrl.contact_right.is_contact);
 
 }
 
 // 超级电容与缓冲能量调参宏定义
 #define BUFFER_COMP_KP      5.0f    // 缓冲能量补偿的比例系数 (Kp)
-#define TARGET_BUFFER       40.0f   // 目标期望缓冲能量 (J)
+#define TARGET_BUFFER       30.0f   // 目标期望缓冲能量 (J)
 #define MIN_CAP_VOLTAGE     23.0f   // 超级电容最低放电阈值 (百分比)
 #define RAMP_CAP_VOLTAGE    27.0f   // 斜坡衰减开始阈值 (百分比)
 #define MAX_BOOST_POWER     150.0f  // 超级电容输出的最大冲刺功率 (W)

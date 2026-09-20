@@ -10,14 +10,15 @@
 #include "Comm_DualBoard.h"
 #include "Referee.h"
 
-#define RC_ROCKER_XY_COEF      0.002f  // 摇杆控制平移的增益
-#define RC_ROCKER_VW_COEF      0.004f   // 摇杆控制自旋的增益
-#define RC_LENGTH_COEF          0.000005f
+#define RC_ROCKER_XY_COEF      0.003f  // 摇杆控制平移的增益
+#define RC_ROCKER_VW_COEF      0.005f   // 摇杆控制自旋的增益
+#define RC_LENGTH_COEF          0.00001f
 #define LEG_LENGTH_TARGET_M  0.340f
 
 // --- 本地静态内存缓存 ---
 
 Chassis_Cmd_t chassis_cmd = {0};
+static uint8_t last_s1 = 0;
 
 
 
@@ -82,7 +83,7 @@ static void Cmd_Update_Remote_Ctrl(void)
         chassis_cmd.target_length=MATH_Limit_float(chassis_cmd.target_length,0.17f,0.32f);
         chassis_cmd.target_vx = (float)DBUS.Remote.CH1 * RC_ROCKER_XY_COEF;
         chassis_cmd.target_vw = -(float)DBUS.Remote.CH2 * RC_ROCKER_VW_COEF;// + (float)DBUS.Remote.Dial * RC_ROCKER_VW_COEF;
-        chassis_cmd.target_roll = (float)DBUS.Remote.CH0 * 0.0002f ;
+        chassis_cmd.target_roll = (float)DBUS.Remote.CH0 * 0.00015f ;
         chassis_cmd.mode = CHASSIS_CMD_FOLLOW;
     }
     chassis_cmd.mode_last = chassis_cmd.mode;
