@@ -11,6 +11,7 @@
 #include "Classic_Control.h"
 #include <math.h>
 #include "Kalman_Observer.h"
+#include "Power_Ctrl.h"
 #include "Vofa.h"
 
 #define WHEEL_RADIUS_M                    0.060f  // 车轮半径，用于轮速换算和质心离地高度计算
@@ -23,10 +24,10 @@
 #define NM_ENCODER                       (1.0f/(0.315f*20.0f)*16384.0f) // 轮电机力矩到电流指令的换算系数
 #define LESO_ENABLE                       1       // LESO补偿使能开关
 
-#define HEIGHT_NATURAL_FREQ_HZ            2.0f   // 高度闭环自然频率，越大高度响应越快
-#define HEIGHT_DAMPING_RATIO              0.8f   // 高度闭环阻尼比，越大振荡越小
-#define ROLL_NATURAL_FREQ_HZ              3.0f   // ROLL闭环自然频率，越大回正和压弯越快
-#define ROLL_DAMPING_RATIO                0.4f  // ROLL闭环阻尼比，越大ROLL振荡越小
+#define HEIGHT_NATURAL_FREQ_HZ            2.0f   // 高度闭环自然频率
+#define HEIGHT_DAMPING_RATIO              0.7f   // 高度闭环阻尼比
+#define ROLL_NATURAL_FREQ_HZ              4.0f   // ROLL闭环自然频率
+#define ROLL_DAMPING_RATIO                0.4f  // ROLL闭环阻尼比
 #define BODY_ROLL_INERTIA_KGM2            0.36f  // 机身绕质心ROLL轴的转动惯量
 #define BODY_COM_OFFSET_FROM_HIP_M        0.0f   // 质心相对髋部的竖直偏移，向上为正
 #define LEG_AXIAL_FORCE_MAX_N           250.0f   // 单腿允许输出的最大轴向力
@@ -37,11 +38,16 @@
 #define CENTRIPETAL_LPF_HZ                4.0f   // 向心加速度低通滤波截止频率
 #define CENTRIPETAL_ACCEL_LIMIT_MPS2     5.0f   // 允许参与补偿的最大向心加速度
 #define ROLL_LEAN_SIGN                   -1.0f   // 主动内倾方向与IMU ROLL正方向的对应关系
-#define ROLL_LEAN_LIMIT_RAD              (5.0f * DEG2RAD) // 主动压弯允许的最大ROLL倾角
+#define ROLL_LEAN_LIMIT_RAD              (9.0f * DEG2RAD) // 主动压弯允许的最大ROLL倾角
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
 static uint16_t save_cnt = 0;
 Chassis_Control_Mode_t MODE;
+
+//功率控制
+static Motor_Power_State_t m_states[2];//底盘共4个电机
+static Power_Motion_Node_t motion_nodes[2];          /**< 四轮模型、运动电流分量及电流上限。 */
+static Power_Motion_Result_t chassis_power_result;   /**< 本周期保留比例、功率预测和分配状态。 */
 
 static float clamp_float(float value, float lower, float upper)
 {
@@ -230,12 +236,12 @@ uint8_t Chassis_Control_Init()
     LESO_Init(&chassis_ctrl.leso);
     Chassis_ResetSupportController();
 
-    float pid_joint_pos[3] = {5.0f, 0.0f, 0.0f};
+    float pid_joint_pos[3] = {6.0f, 0.0f, 0.0f};
     float pid_joint_vel[3] = {12.0f, 0.0f, 0.0f};
     for (int i = 0; i < 4; i++) {
-        PID_Init(&chassis_ctrl.joint_pos[i], 2.0f, 0.0f,
+        PID_Init(&chassis_ctrl.joint_pos[i], 3.0f, 0.0f,
             pid_joint_pos, 0, 0, 0, 0, 0, 0);
-        PID_Init(&chassis_ctrl.joint_vel[i], 5.0f, 0.0f,
+        PID_Init(&chassis_ctrl.joint_vel[i], 6.0f, 0.0f,
             pid_joint_vel, 0, 0, 0, 0, 0, 0);
     }
 
@@ -247,6 +253,13 @@ uint8_t Chassis_Control_Init()
     BM_save_zeroPoint_User(&leg_motors.BM_P1010B_Leg[1],0.489915133f);
     BM_save_zeroPoint_User(&leg_motors.BM_P1010B_Leg[2],-2.08909842f);
     BM_save_zeroPoint_User(&leg_motors.BM_P1010B_Leg[3],0.292033000f);
+
+    chassis_power_result = (Power_Motion_Result_t){0};
+    for (uint8_t wheel_index = 0; wheel_index < 2; wheel_index++) {
+        motion_nodes[wheel_index].motor.state = &m_states[wheel_index];
+        motion_nodes[wheel_index].motor.model = &MODEL_M3508;
+        motion_nodes[wheel_index].max_cmd = 16000.0f;
+    }
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
     return 1;
@@ -304,6 +317,7 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
     Estimator_Set_WheelSpeeds(&chassis_ctrl.odometry,
                               left_wheel_speed_mps,
                               right_wheel_speed_mps);
+    Buffer_Calc(&Meter,dt,50);
     chassis_ctrl.body_position_m = chassis_ctrl.odometry.outstate.s;
     chassis_ctrl.body_velocity_mps = chassis_ctrl.odometry.outstate.dot_s;
     if (!Is_Group_Online(CHASSIS)) {
@@ -421,16 +435,41 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                             * NM_ENCODER);
                         wheel_raw[1] = (int16_t)(-chassis_ctrl.lqr.u[2]
                             * NM_ENCODER);
-                        if (chassis_ctrl.vmc.left.support_force > 20) {
-                            wheel_raw[1] = 0;
-                        }else if (chassis_ctrl.vmc.right.support_force > 20) {
-                            wheel_raw[0] = 0;
+                        /* 功率预测使用当前电机 RPM。 */
+                        for (uint8_t wheel_index = 0; wheel_index < 2; wheel_index++) {
+                            m_states[wheel_index].speed_rpm = c_motor->DJI_3508_Chassis[wheel_index].Speed_now;
+                            motion_nodes[wheel_index].translation_cmd = wheel_raw[wheel_index];
+                        }
+                        bool trigger_discharge = chassis_cmd.is_cap_on;// 输入电容开启标志
+                        float cap_board_limit = 0.0f;
+                        float final_limit = 0.0f;
+                        if (Referee.offline.is_online) {
+                            final_limit = Chassis_Power_Arbitrator(
+                                                    Referee.robot_status.chassis_power_limit,
+                                                    Referee.power_heat_data.buffer_energy,
+                                                    1, &cap, &trigger_discharge, &cap_board_limit);
+                        }
+                        else {
+                            final_limit = Chassis_Power_Arbitrator(
+                                                    500,Meter.buffer_energy,
+                                                    1, &cap, &trigger_discharge, &cap_board_limit);
+                        }
+                        if (final_limit < 0.0f) final_limit = 0.0f;
+                        /* 跟随模式优先旋转；小陀螺及其他运行模式优先保留平移。 */
+                        Power_Motion_Priority_t power_priority = POWER_PRIORITY_TRANSLATION;
+                        Power_Motion_Status_t power_status = Power_Ctrl_Allocate_Motion_With_Priority(
+                            final_limit, motion_nodes, 2, power_priority, &chassis_power_result);
+                        /* 仅发送已通过功率和电流约束检查的结果，分配失败时本周期输出零电流。 */
+                        bool power_output_valid = power_status == POWER_MOTION_OK ||
+                                                  power_status == POWER_MOTION_LIMITED;
+                        for (uint8_t wheel_index = 0; wheel_index < 2; wheel_index++) {
+                            wheel_raw[wheel_index] = power_output_valid ? m_states[wheel_index].limited_cmd : 0.0f;
                         }
                         DJI_Motor_Send(&hfdcan1, 0x200,wheel_raw[0],0,wheel_raw[1],0);
                         applied_input[0] = chassis_ctrl.lqr.u[0];
                         applied_input[1] = chassis_ctrl.lqr.u[1];
-                        applied_input[2] = chassis_ctrl.lqr.u[2];
-                        applied_input[3] = chassis_ctrl.lqr.u[3];
+                        applied_input[2] = -wheel_raw[1]/NM_ENCODER;
+                        applied_input[3] = wheel_raw[0]/NM_ENCODER;
                     }
                     break;
                 case CTRL_JUMP:
@@ -441,22 +480,27 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
             }
         }
     }
-    // else {
-    //
-    // }
     LESO_SetAppliedInput(&chassis_ctrl.leso, applied_input,
                          chassis_ctrl.lqr.u_eq);
-    // VOFA_JustFloat(&huart1, 7,
-    //     chassis_ctrl.lqr.x[0],
-    //     chassis_ctrl.lqr.x_ref[0],
-    //     chassis_ctrl.lqr.x[5],
-    //     chassis_ctrl.lqr.x_ref[5],
-    //     imu->pitch,
-    //     imu->roll,0.0f);
+    if (chassis_cmd.is_collect) {
+        VOFA_JustFloat(&huart1, 11,
+            chassis_ctrl.vmc.left.support_force,
+            chassis_ctrl.vmc.left.support_torque,
+            chassis_ctrl.vmc.left.theta[0],
+            chassis_ctrl.vmc.left.theta[1],
+            chassis_ctrl.vmc.left.theta[2],
+            chassis_ctrl.vmc.left.length[0],
+            chassis_ctrl.vmc.left.length[1],
+            chassis_ctrl.vmc.left.length[2],
+            imu->accel[2],
+            Meter.power,
+            Meter.buffer_energy);
+    }
+
 }
 
 // 超级电容与缓冲能量调参宏定义
-#define BUFFER_COMP_KP      2.0f    // 缓冲能量补偿的比例系数 (Kp)
+#define BUFFER_COMP_KP      5.0f    // 缓冲能量补偿的比例系数 (Kp)
 #define TARGET_BUFFER       40.0f   // 目标期望缓冲能量 (J)
 #define MIN_CAP_VOLTAGE     23.0f   // 超级电容最低放电阈值 (百分比)
 #define RAMP_CAP_VOLTAGE    27.0f   // 斜坡衰减开始阈值 (百分比)

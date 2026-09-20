@@ -1,9 +1,8 @@
 // Auto-generated quartic leg-angle equilibrium offset; do not edit.
 #pragma once
-#include "k_table_2d.h"
 
 static const float e3_coeff[5] = {
-    -25.95248518f, 26.99365680f, -10.63632856f, 2.08213468f, -0.19642741f
+    48.26729184f, -49.80068573f, 19.07902575f, -3.48980823f, 0.28193981f
 };
 
 static inline float e3_eval(float length) {

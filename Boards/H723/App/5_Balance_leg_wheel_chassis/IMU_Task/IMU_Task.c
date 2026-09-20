@@ -45,7 +45,7 @@ static uint16_t gyro_calib_cnt   = 0;//陀螺仪校准计数
 static float heater_pwm_out   = 0;// 当前加热片PWM输出值
 static IMU_Fusion_Algo_e current_fusion_algo = VQF;
 //IMU加速度计偏心补偿
-static const float LEVER_ARM_OFFSET[3] = {0.0f, 0.0f, 0.0f};//IMU 相对旋转中心的偏移量（单位：米）
+static const float LEVER_ARM_OFFSET[3] = {-0.19f, 0.0f, 0.0f};//IMU 相对旋转中心的偏移量（单位：米）
 // 角加速度低通系数（0~1），越小越平滑，越大响应越快
 #define LEVER_ARM_ALPHA_LPF     0.25f
 // 加速度单位转换系数

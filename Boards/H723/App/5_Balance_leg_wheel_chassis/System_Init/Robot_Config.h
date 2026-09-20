@@ -13,6 +13,7 @@
 #include "DBUS.h"
 #include "VT13.h"
 #include "Power_CAP.h"
+#include "Power_Meter.h"
 
 typedef struct __attribute__((aligned(4))){
     DJI_MOTOR_DATA_Typedef DJI_3508_Chassis[2];
@@ -29,6 +30,7 @@ extern Referee_Data_t Referee;
 extern DBUS_Typedef   DBUS;
 extern VT13_Typedef   VT13;
 extern Cap_t          cap;
+extern Power_Meter_t Meter;
 
 extern BSP_PWM_t imu_heater_pwm;
 extern BSP_PWM_t trigger_pwm;

@@ -6,16 +6,12 @@
 #include "System_State.h"
 #include "DBUS.h"
 #include "Aim_Vision.h"
-#include "All_define.h"
-#include "BSP_UART.h"
 #include "Horizon_MATH.h"
 #include "Comm_DualBoard.h"
 #include "Referee.h"
-#include "usart.h"
-#include "VT13.h"
 
-#define RC_ROCKER_XY_COEF      0.003f  // 摇杆控制平移的增益
-#define RC_ROCKER_VW_COEF      0.005f   // 摇杆控制自旋的增益
+#define RC_ROCKER_XY_COEF      0.002f  // 摇杆控制平移的增益
+#define RC_ROCKER_VW_COEF      0.004f   // 摇杆控制自旋的增益
 #define RC_LENGTH_COEF          0.000005f
 #define LEG_LENGTH_TARGET_M  0.340f
 
@@ -84,12 +80,18 @@ static void Cmd_Update_Remote_Ctrl(void)
     else {
         chassis_cmd.target_length += (float)DBUS.Remote.CH3 * RC_LENGTH_COEF;
         chassis_cmd.target_length=MATH_Limit_float(chassis_cmd.target_length,0.17f,0.32f);
-        chassis_cmd.target_vx = (float)DBUS.Remote.CH1 * RC_ROCKER_XY_COEF ;//+ (float)VT13.Remote.Channel[1] * RC_ROCKER_XY_COEF;
+        chassis_cmd.target_vx = (float)DBUS.Remote.CH1 * RC_ROCKER_XY_COEF;
         chassis_cmd.target_vw = -(float)DBUS.Remote.CH2 * RC_ROCKER_VW_COEF;// + (float)DBUS.Remote.Dial * RC_ROCKER_VW_COEF;
-        chassis_cmd.target_roll = (float)DBUS.Remote.CH0 * 0.0003f ;
+        chassis_cmd.target_roll = (float)DBUS.Remote.CH0 * 0.0002f ;
         chassis_cmd.mode = CHASSIS_CMD_FOLLOW;
     }
     chassis_cmd.mode_last = chassis_cmd.mode;
+    if (DBUS.Remote.S1 == 2) {
+        chassis_cmd.is_collect = true;
+    }
+    else {
+        chassis_cmd.is_collect = false;
+    }
 }
 
 /**

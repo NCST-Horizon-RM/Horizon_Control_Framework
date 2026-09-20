@@ -25,6 +25,7 @@ static uint8_t Referee_Rx_Buf[2][REFEREE_RXFRAME_LENGTH]__attribute__((section("
 DBUS_Typedef DBUS = {0};
 static uint8_t DBUS_RX_DATA[18]__attribute__((section(".RAM_D2")));
 Cap_t cap;
+Power_Meter_t Meter;
 
 /* ================= 链接器段自动注册 ================= */
 
@@ -41,6 +42,8 @@ OFFLINE_NODE(&chassis_motors.DJI_3508_Chassis[0].offline, MOTOR_OFFLINE_TIME, CH
 
 CAN_RX_NODE(FDCAN1, 0x201, &chassis_motors.DJI_3508_Chassis[1], DJI_Motor_Resolve);
 OFFLINE_NODE(&chassis_motors.DJI_3508_Chassis[1].offline, MOTOR_OFFLINE_TIME, CHASSIS);
+
+CAN_RX_NODE(FDCAN1, 0x603, &Meter, CAN_Power_Rx);
 
 CAN_RX_NODE(FDCAN2, 0x51, &leg_motors.BM_P1010B_Leg[0], BM_Motor_Resolve);
 OFFLINE_NODE(&leg_motors.BM_P1010B_Leg[0].offline, MOTOR_OFFLINE_TIME, CHASSIS);
