@@ -21,9 +21,6 @@
 #define RIGHT_WHEEL_SIGN                  1.0f    // 右轮速度反馈方向修正
 #define NM_ENCODER                       (1.0f/(0.315f*20.0f)*16384.0f) // 轮电机力矩到电流指令的换算系数
 #define LESO_ENABLE                       1       // LESO补偿使能开关
-#define JUMP_THRUST_FORCE_N               500.0f
-#define JUMP_RETRACT_LENGTH_M             0.17f
-#define JUMP_RETRACT_COMPLETE_TOL_M       0.003f
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
 static uint16_t save_cnt = 0;
@@ -93,6 +90,13 @@ uint8_t Chassis_Control_Init()
             pid_joint_vel, 0, 0, 0, 0, 0, 0);
     }
 
+    // 底盘跟随PID初始化
+    float PID_Follow_Pos[3] = {10.0f,   0.0f,   0.0f};
+    PID_Init(&chassis_ctrl.Follow_Pos, 15.0f, 0.0f, PID_Follow_Pos,
+             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
+    float PID_Follow_Spd[3] = {1.0f,   0.0f,   0.0f};
+    PID_Init(&chassis_ctrl.Follow_Vel, 8.0f, 1.0f, PID_Follow_Spd,
+             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
 
     chassis_ctrl.wheel_speed_mps = 0.0f;
     chassis_ctrl.body_position_m = 0.0f;
@@ -184,8 +188,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
         DJI_Motor_Send(&hfdcan1,0x200,0,0,0,0);
     }
     else {
-        if (chassis_cmd.mode == CHASSIS_CMD_FOLLOW) {
-
             switch (MODE) {
                 case CTRL_SAVE:
                     Chassis_ResetSupportController();
@@ -222,7 +224,7 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                         Estimator_Leg_Init(&chassis_ctrl.odometry);
 
                         if (save_cnt >= 50) {
-                            chassis_cmd.target_length = 0.16f;
+                            chassis_cmd.target_length = 0.17f;
                             MODE = CTRL_STAND;
                             save_cnt = 0;
                         }
@@ -258,14 +260,36 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
 
                             chassis_ctrl.stand_initialized = true;
                         }
+
+                        float vw_tar = 0;
+                        static float yaw_rad = 0;
+                        // 底盘跟随模式下，计算底盘跟随PID
+                        if (chassis_cmd.mode == CHASSIS_CMD_FOLLOW) {
+                            PID_Calculate(&chassis_ctrl.Follow_Pos, chassis_cmd.offset_angle, 0.0f);
+                            vw_tar = PID_Calculate(&chassis_ctrl.Follow_Vel, imu->gyro[2], chassis_ctrl.Follow_Pos.Output);
+                            LQR_SetTarget(&chassis_ctrl.lqr,
+                              chassis_cmd.target_vx,
+                              vw_tar,
+                              0.0f, 0.0f, 0.0f, 0.0f, dt);
+                        }
+                        else if (chassis_cmd.mode == CHASSIS_CMD_SPIN) {
+                            vw_tar = chassis_cmd.target_vw;
+                            yaw_rad += vw_tar * dt;
+                            yaw_rad = normalize_to_pi(yaw_rad);
+                            yaw_rad = chassis_cmd.offset_angle + normalize_to_pi(yaw_rad - chassis_cmd.offset_angle);
+                            LQR_SetTarget(&chassis_ctrl.lqr,
+                              chassis_cmd.target_vx,
+                              vw_tar,
+                              0.0f, yaw_rad, 0.0f, 0.0f, dt);
+                        }
+                        VOFA_JustFloat(&huart1,5,chassis_ctrl.lqr.x[1],
+                            chassis_ctrl.lqr.x_ref[1],
+                            chassis_ctrl.lqr.target.yaw_rad,
+                            vw_tar,yaw_rad);
                         Estimator_Task(&chassis_ctrl.odometry, *imu, dt);
-                        LQR_SetTarget(&chassis_ctrl.lqr,
-                          chassis_cmd.target_vx,
-                          chassis_cmd.target_vw,
-                          0.0f, 0.0f, 0.0f, dt);
                         LQR_Update(&chassis_ctrl.lqr, &chassis_ctrl.vmc,
                                    &chassis_ctrl.odometry, imu, &chassis_ctrl.leso,
-                                   leso_learning_enabled);
+                                   leso_learning_enabled,chassis_cmd.offset_angle);
                         chassis_ctrl.lqr.u[2] = MATH_Limit_float(chassis_ctrl.lqr.u[2], -6, 6);
                         chassis_ctrl.lqr.u[3] = MATH_Limit_float(chassis_ctrl.lqr.u[3], -6, 6);
                         Chassis_UpdateSupportForces(imu, dt);
@@ -328,22 +352,8 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                 default:break;
             }
         }
-    }
     LESO_SetAppliedInput(&chassis_ctrl.leso, applied_input,
                          chassis_ctrl.lqr.u_eq);
-        VOFA_JustFloat(&huart1, 11,
-            chassis_ctrl.vmc.left.support_force,
-            chassis_ctrl.vmc.left.support_torque,
-            chassis_ctrl.vmc.left.theta[0],
-            chassis_ctrl.vmc.left.theta[1],
-            chassis_ctrl.vmc.left.theta[2],
-            chassis_ctrl.vmc.left.length[0],
-            chassis_ctrl.vmc.left.length[1],
-            chassis_ctrl.vmc.left.length[2],
-            imu->accel[2],
-            (float)chassis_ctrl.contact_left.is_contact,
-            (float)chassis_ctrl.contact_right.is_contact);
-
 }
 
 // 超级电容与缓冲能量调参宏定义

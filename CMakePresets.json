@@ -80,6 +80,24 @@
             }
         },
         {
+            "name": "F407-5_Balance_leg_wheel_Gimbal-Debug",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/Boards/F407/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ACTIVE_APP": "5_Balance_leg_wheel_Gimbal"
+            }
+        },
+        {
+            "name": "F407-5_Balance_leg_wheel_Gimbal-Release",
+            "inherits": "base",
+            "toolchainFile": "${sourceDir}/Boards/F407/cmake/gcc-arm-none-eabi.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ACTIVE_APP": "5_Balance_leg_wheel_Gimbal"
+            }
+        },
+        {
             "name": "H723-1_Catapult_Hero-Debug",
             "inherits": "base",
             "toolchainFile": "${sourceDir}/Boards/H723/cmake/gcc-arm-none-eabi.cmake",
@@ -148,6 +166,14 @@
         {
             "name": "F407-4_Omin_Infanty_Gimbal-Release",
             "configurePreset": "F407-4_Omin_Infanty_Gimbal-Release"
+        },
+        {
+            "name": "F407-5_Balance_leg_wheel_Gimbal-Debug",
+            "configurePreset": "F407-5_Balance_leg_wheel_Gimbal-Debug"
+        },
+        {
+            "name": "F407-5_Balance_leg_wheel_Gimbal-Release",
+            "configurePreset": "F407-5_Balance_leg_wheel_Gimbal-Release"
         },
         {
             "name": "H723-1_Catapult_Hero-Debug",

@@ -11,7 +11,7 @@ void LQR_Init(LQR_Control_t *lqr)
 }
 
 void LQR_SetTarget(LQR_Control_t *lqr, float velocity_mps,
-                   float yaw_rate_radps, float pitch_rad,
+                   float yaw_rate_radps, float pitch_rad,float yaw_rad,
                    float left_leg_theta_rad, float right_leg_theta_rad,
                    float dt)
 {
@@ -20,7 +20,7 @@ void LQR_SetTarget(LQR_Control_t *lqr, float velocity_mps,
     }
     if (dt > 0.0f && dt < 0.1f) {
         lqr->target.position_m += lqr->target.velocity_mps * dt;
-        lqr->target.yaw_rad += lqr->target.yaw_rate_radps * dt;
+        lqr->target.yaw_rad = yaw_rad;
     }
     lqr->target.velocity_mps = velocity_mps;
     lqr->target.yaw_rate_radps = yaw_rate_radps;
@@ -32,7 +32,7 @@ void LQR_SetTarget(LQR_Control_t *lqr, float velocity_mps,
 void LQR_Update(LQR_Control_t *lqr, const VMC_Control_t *vmc,
                 const Kalman_Observer_t *observer,
                 const IMU_Data_t *imu, LESO_Control_t *leso,
-                bool leso_learning_enabled)
+                bool leso_learning_enabled,float yaw)
 {
     if (lqr == NULL || vmc == NULL || observer == NULL || imu == NULL ||
         leso == NULL) {
@@ -41,7 +41,8 @@ void LQR_Update(LQR_Control_t *lqr, const VMC_Control_t *vmc,
 
     /* State order must match the offline linearization and k_table_2d.h. */
     lqr->x[0] = observer->outstate.s;
-    lqr->x[1] = imu->YawTotalAngle * DEG2RAD;
+    //lqr->x[1] = imu->YawTotalAngle * DEG2RAD;
+    lqr->x[1] = yaw;
     lqr->x[2] = imu->pitch * DEG2RAD;
     lqr->x[3] = vmc->left.theta[0];
     lqr->x[4] = vmc->right.theta[0];

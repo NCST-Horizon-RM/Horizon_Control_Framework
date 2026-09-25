@@ -5,6 +5,7 @@
 #include "IMU_Task.h"
 #include "Kalman_Observer.h"
 #include "LESO_Control.h"
+#include "Robot_Config.h"
 
 #define LQR_STATE_SIZE 10
 #define LQR_OUTPUT_SIZE 4
@@ -31,12 +32,12 @@ typedef struct {
 
 void LQR_Init(LQR_Control_t *lqr);
 void LQR_SetTarget(LQR_Control_t *lqr, float velocity_mps,
-                   float yaw_rate_radps, float pitch_rad,
+                   float yaw_rate_radps, float pitch_rad,float yaw_rad,
                    float left_leg_theta_rad, float right_leg_theta_rad,
                    float dt);
 void LQR_Update(LQR_Control_t *lqr, const VMC_Control_t *vmc,
                 const Kalman_Observer_t *observer,
                 const IMU_Data_t *imu, LESO_Control_t *leso,
-                bool leso_learning_enabled);
+                bool leso_learning_enabled,float yaw);
 
 #endif

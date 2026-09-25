@@ -8,28 +8,28 @@
 /* 车体和轮距参数，用于重力前馈、向心力矩和左右支撑力分配。 */
 #define SUPPORT_WHEEL_RADIUS_M                 0.060f /**< 车轮半径，单位 m。 */
 #define SUPPORT_WHEEL_HALF_TRACK_M             0.20f  /**< 左右轮中心到车体中心距离，单位 m。 */
-#define SUPPORT_BODY_MASS_KG                  17.5f   /**< 参与高度控制的等效车体质量，单位 kg。 */
+#define SUPPORT_BODY_MASS_KG                  22.0f   /**< 参与高度控制的等效车体质量，单位 kg。 */
 #define SUPPORT_GRAVITY_MPS2                   9.81f  /**< 重力加速度，单位 m/s²。 */
 
 /* 高度和 ROLL 二阶闭环目标参数。 */
-#define SUPPORT_HEIGHT_NATURAL_FREQ_HZ         3.0f   /**< 机身高度闭环自然频率，单位 Hz。 */
+#define SUPPORT_HEIGHT_NATURAL_FREQ_HZ         2.5f   /**< 机身高度闭环自然频率，单位 Hz。 */
 #define SUPPORT_HEIGHT_DAMPING_RATIO           0.75f   /**< 机身高度闭环阻尼比。 */
 #define SUPPORT_ROLL_NATURAL_FREQ_HZ           4.0f   /**< ROLL 闭环自然频率，单位 Hz。 */
-#define SUPPORT_ROLL_DAMPING_RATIO             0.4f   /**< ROLL 闭环阻尼比。 */
-#define SUPPORT_BODY_ROLL_INERTIA_KGM2         0.36f  /**< 机身绕质心 ROLL 轴转动惯量，单位 kg·m²。 */
+#define SUPPORT_ROLL_DAMPING_RATIO             0.3f   /**< ROLL 闭环阻尼比。 */
+#define SUPPORT_BODY_ROLL_INERTIA_KGM2         0.40f  /**< 机身绕质心 ROLL 轴转动惯量，单位 kg·m²。 */
 #define SUPPORT_BODY_COM_OFFSET_FROM_HIP_M     0.0f   /**< 质心相对髋部的竖直偏移，向上为正，单位 m。 */
 
 /* 单腿输出和机构安全约束。 */
 #define SUPPORT_LEG_AXIAL_FORCE_MAX_N        2500.0f   /**< 单腿最大轴向力，单位 N。 */
-#define SUPPORT_LEG_FORCE_RATE_LIMIT_NPS    2500.0f   /**< 单腿轴向力最大变化率，单位 N/s。 */
-#define SUPPORT_LEG_VERTICAL_COS_MIN           0.35f  /**< 轴向力换算竖直力时的最小余弦。 */
+#define SUPPORT_LEG_FORCE_RATE_LIMIT_NPS    25000.0f   /**< 单腿轴向力最大变化率，单位 N/s。 */
+#define SUPPORT_LEG_VERTICAL_COS_MIN           0.2f  /**< 轴向力换算竖直力时的最小余弦。 */
 #define SUPPORT_LEG_THEORETICAL_MAX_LENGTH_M   0.33f  /**< 虚拟腿理论最大长度，单位 m。 */
 
 /* 转弯向心加速度滤波和主动内倾约束。 */
 #define SUPPORT_CENTRIPETAL_LPF_HZ             4.0f   /**< 向心加速度低通截止频率，单位 Hz。 */
 #define SUPPORT_CENTRIPETAL_ACCEL_LIMIT_MPS2   5.0f   /**< 参与主动内倾的最大向心加速度，单位 m/s²。 */
 #define SUPPORT_ROLL_LEAN_SIGN                -1.0f   /**< 主动内倾方向与 IMU ROLL 正方向的映射。 */
-#define SUPPORT_ROLL_LEAN_LIMIT_RAD           (9.0f * DEG2RAD) /**< 主动内倾角最大幅值。 */
+#define SUPPORT_ROLL_LEAN_LIMIT_RAD           (0.0f * DEG2RAD) /**< 主动内倾角最大幅值。 */
 
 /** @brief 将浮点数限制在指定闭区间。 */
 static float support_clamp(float value, float lower, float upper)

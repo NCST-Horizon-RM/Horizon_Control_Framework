@@ -18,6 +18,7 @@
 // 设备数据实例：ISR 写 / 任务读（裸全局 volatile）
 Chassis_Motor_Group_t chassis_motors;
 Leg_Motor_Group_t leg_motors;
+Gimbal_Motor_Group_t gimbal_motors;
 
 Referee_Data_t Referee;
 static uint8_t Referee_Rx_Buf[2][REFEREE_RXFRAME_LENGTH]__attribute__((section(".RAM_D2")));
@@ -26,10 +27,11 @@ DBUS_Typedef DBUS = {0};
 static uint8_t DBUS_RX_DATA[18]__attribute__((section(".RAM_D2")));
 Cap_t cap;
 Power_Meter_t Meter;
+G2C_t g2c = {0};
 
 /* ================= 链接器段自动注册 ================= */
 
-UART_RX_NODE(&huart5, 100000,0,0, 18, DBUS_RX_DATA, NULL, 18, &DBUS, DBUS_Resolved);
+UART_RX_NODE(&huart5, 100000,0,0, 18, DBUS_RX_DATA, NULL, 18, &DBUS, NULL);
 OFFLINE_NODE(&DBUS.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 
 UART_RX_NODE(&huart7, 921600,0,0, 21, NULL, NULL, 21, NULL, VT13_Resolved);
@@ -42,6 +44,11 @@ OFFLINE_NODE(&chassis_motors.DJI_3508_Chassis[0].offline, MOTOR_OFFLINE_TIME, CH
 
 CAN_RX_NODE(FDCAN1, 0x201, &chassis_motors.DJI_3508_Chassis[1], DJI_Motor_Resolve);
 OFFLINE_NODE(&chassis_motors.DJI_3508_Chassis[1].offline, MOTOR_OFFLINE_TIME, CHASSIS);
+
+CAN_RX_NODE(FDCAN1, 0x301, &gimbal_motors.DM4310_Yaw, DM_1to4_Resolve);
+OFFLINE_NODE(&gimbal_motors.DM4310_Yaw.offline, MOTOR_OFFLINE_TIME, GIMBAL);
+
+CAN_RX_NODE(FDCAN1, 0x231, &g2c, DualBoard_CAN_Rx_Callback);
 
 CAN_RX_NODE(FDCAN1, 0x603, &Meter, CAN_Power_Rx);
 
