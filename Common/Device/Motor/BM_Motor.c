@@ -1,9 +1,9 @@
 #include "BM_Motor.h"
 #include "BSP_CAN.h"
+#include "Horizon_MATH.h"
 // 后有大写的代码为经常调用代码
 
 reporter BM_reporter1 = {0};
-BM_MOTOR_DATA_Typedef BM_motor_data = {0};
 
 // 驱动指令
 // @param stdid 0x032 1-4
@@ -77,6 +77,7 @@ void BM_Motor_Resolve(void *instance, uint8_t *rx_data)
 
     DATA->vel_rad = -DATA->vel * 0.10471975511965976666666666666667f; // *pi/30
     DATA->pos_rad = -(float)DATA->pos_con * 0.00019174759848570513916015625f - DATA->pos_init_rad; // *pi/32768
+    DATA->pos_single = normalize_to_pi(DATA->pos_rad);
     // DATA->pos_init_rad = -(float)DATA->pos_init * 0.00019174759848570513916015625f; // *pi/32768
 }
 
@@ -157,7 +158,7 @@ void BM_query_get_status(uint8_t *rx_data, uint8_t check1, uint8_t check2, uint8
 
 
 // 参数设置指令
-// @param mode 0x1C 设置模式 电流/速度/位置 2/3/4  
+// @param mode 0x1C 设置模式 电流/速度/位置 2/3/4
 //             0x2A 设置ID
 void BM_set_param(hcan_t *hcan, uint8_t ID, uint8_t Identifier, uint8_t mode)
 {
@@ -188,7 +189,7 @@ void BM_save_zeroPoint(hcan_t *hcan)
 }
 
 // 模式设置
-// @param mode 0x1C 设置模式 电流/速度/位置 2/3/4  
+// @param mode 0x1C 设置模式 电流/速度/位置 2/3/4
 void BM_set_Mode(hcan_t *hcan, uint8_t ID, uint8_t mode)
 {
     BM_set_param(hcan, ID, 0x1C, mode);
@@ -231,4 +232,7 @@ void BM_disable(hcan_t *hcan, uint8_t ID)
     CAN_Send_Msg(hcan, stdid, TxData, 8);
 }
 
-// void BM_
+void BM_save_zeroPoint_User(BM_MOTOR_DATA_Typedef *DATA,float zeroPoint)
+{
+    DATA->pos_init_rad=zeroPoint;
+}

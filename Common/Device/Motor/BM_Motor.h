@@ -43,10 +43,10 @@ typedef struct
 	float voltage;
 	float vel_rad;
 	float pos_rad;
+	float pos_single;
 	float pos_init_rad;
 }BM_MOTOR_DATA_Typedef;
 
-extern BM_MOTOR_DATA_Typedef BM_motor_data;
 
 void BM_Drive(hcan_t *hcan, uint16_t stdid ,int16_t speed, uint8_t ID);
 void BM_EnableDisable(hcan_t *hcan, uint8_t mode);
@@ -58,6 +58,6 @@ void BM_Send_IQ(hcan_t *hcan, uint16_t stdid ,float IQ, uint8_t ID);
 void BM_set_ID(hcan_t *hcan, uint8_t ID, uint8_t new_ID);
 void BM_save_flash(hcan_t* hcan);
 void BM_save_zeroPoint(hcan_t *hcan);
-
+void BM_save_zeroPoint_User(BM_MOTOR_DATA_Typedef *DATA,float zeroPoint);
 
 #endif // !__BM_MOTOR_H__

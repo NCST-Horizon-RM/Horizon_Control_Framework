@@ -43,5 +43,6 @@ static const Auto_Offline_Reg_t MACRO_CONCAT(_offline_reg_, __LINE__) = { \
 }
 void Offline_Monitor(void);
 bool Is_Group_Online(Device_Group_e group);
+bool Is_Any_Device_Online(Device_Group_e group);
 
 #endif //HORIZON_OFFLINE_DETECTOR_H

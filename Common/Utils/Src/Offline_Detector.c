@@ -46,3 +46,23 @@ bool Is_Group_Online(Device_Group_e group)
     }
     return true;
 }
+
+bool Is_Any_Device_Online(Device_Group_e group)
+{
+    if (&__start_Offline_Reg_Sec == &__stop_Offline_Reg_Sec) {
+        return false;
+    }
+
+    const Auto_Offline_Reg_t *reg = &__start_Offline_Reg_Sec;
+    for (; reg < &__stop_Offline_Reg_Sec; reg++)
+    {
+        if (group == GROUP_ALL || reg->group == group)
+        {
+            Offline_Check_t *dev = reg->node;
+            if (dev != NULL && dev->is_online == true) {
+                return true;
+            }
+        }
+    }
+    return false;
+}

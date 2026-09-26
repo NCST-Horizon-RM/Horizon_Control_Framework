@@ -29,9 +29,9 @@ static bool Is_All_Tasks_Running(void) {
 }
 
 static bool Is_Any_Core_Device_Online(void) {
-    return (sys_state.task_health.Chassis == STATUS_RUN ||
-            sys_state.task_health.Gimbal  == STATUS_RUN ||
-            sys_state.task_health.Shoot   == STATUS_RUN);
+    return (sys_state.task_health.Chassis == Is_Any_Device_Online(CHASSIS) ||
+            sys_state.task_health.Gimbal  == Is_Any_Device_Online(GIMBAL) ||
+            sys_state.task_health.Shoot   == Is_Any_Device_Online(SHOOT));
 }
 
 void System_State_Report_Remote(bool is_online) {
