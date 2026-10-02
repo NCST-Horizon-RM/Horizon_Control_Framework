@@ -2,7 +2,7 @@
 #pragma once
 
 static const float e3_coeff[5] = {
-    12.23361804f, -19.55147261f, 10.28173426f, -2.35944672f, 0.22192577f
+    10.83821135f, -17.53636007f, 9.27760300f, -2.13698688f, 0.20151842f
 };
 
 static inline float e3_eval(float length) {

@@ -44,6 +44,7 @@
  *----------------------------------------------------------*/
 
 /* USER CODE BEGIN Includes */
+#include "stm32f4xx.h"
 /* Section where include file can be added */
 /* USER CODE END Includes */
 
@@ -164,6 +165,10 @@ standard names. */
 #define USE_CUSTOM_SYSTICK_HANDLER_IMPLEMENTATION 0
 
 /* USER CODE BEGIN Defines */
+#define INCLUDE_xTaskGetIdleTaskHandle 1
+#define configGENERATE_RUN_TIME_STATS 1
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() ((void)0)
+#define portGET_RUN_TIME_COUNTER_VALUE() (TIM2->CNT)
 /* Section where parameter definitions can be added (for instance, to override default ones in FreeRTOS.h) */
 /* USER CODE END Defines */
 
