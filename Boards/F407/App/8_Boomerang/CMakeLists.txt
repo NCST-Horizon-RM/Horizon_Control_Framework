@@ -2,9 +2,7 @@ cmake_minimum_required(VERSION 3.22)
 
 # 搜集当前 App 目录下的所有源文件
 file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS "*.c" "*.cpp" "*.s")
-add_library(App_Module STATIC ${APP_SOURCES}
-        Boomerang_Task.c
-        Boomerang_Task.h)
+add_library(App_Module STATIC ${APP_SOURCES})
 
 # 自动递归搜集并包含当前 App 目录下的所有头文件路径
 file(GLOB_RECURSE APP_H_FILES CONFIGURE_DEPENDS "*.h" "*.hpp")

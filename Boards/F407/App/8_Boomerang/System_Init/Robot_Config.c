@@ -17,7 +17,7 @@
 #include "IMU_Task.h"
 
 // 设备数据实例：ISR 写 / 任务读（裸全局 volatile）
-Boomerang_Motor_Group_t boomerang_motors;
+Boomerang_Motor_Group_t boomerang_motors = {0};
 // Chassis_Motor_Group_t chassis_motors;
 // Gimbal_Motor_Group_t gimbal_motors;
 
@@ -35,8 +35,8 @@ G2C_t g2c = {0};
 UART_RX_NODE(&huart3, 100000,0,0, 18, DBUS_RX_DATA, NULL, 18, &DBUS, DBUS_Resolved);
 OFFLINE_NODE(&DBUS.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 
-UART_RX_NODE(&huart6, 921600,0,0, 0, VT13_RX_DATA, NULL, 13, &VT13, VT13_Resolved);
-OFFLINE_NODE(&VT13.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
+// UART_RX_NODE(&huart6, 921600,0,0, 0, VT13_RX_DATA, NULL, 13, &VT13, VT13_Resolved);
+// OFFLINE_NODE(&VT13.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 
 UART_RX_NODE(&huart1, 115200,0,0, 0, Referee_Rx_Buf[0], Referee_Rx_Buf[1], REFEREE_RXFRAME_LENGTH, &Referee, Referee_System_Frame_Update);
 OFFLINE_NODE(&Referee.offline, REFEREE_OFFLINE_TIME, GROUP_NONE);

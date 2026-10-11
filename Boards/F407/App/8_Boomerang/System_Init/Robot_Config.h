@@ -41,6 +41,7 @@ extern DBUS_Typedef   DBUS;
 extern VT13_Typedef   VT13;
 extern Cap_t          cap;
 extern G2C_t          g2c;
+extern Boomerang_Motor_Group_t boomerang_motors;
 
 extern BSP_PWM_t imu_heater_pwm;
 
