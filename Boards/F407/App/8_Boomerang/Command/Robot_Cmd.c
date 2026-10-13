@@ -17,7 +17,7 @@
 // #define FRICTION_MAX_RPM       6500.0f
 // #define FRICTION_RAMP_STEP     1.7f    //摩擦轮缓启动时长
 //
-// #define RC_ROCKER_XY_COEF      0.004f  // 摇杆控制平移的增益
+ #define RC_ROCKER_SPRING_COEF      4  // 摇杆控制平移的增益
 // #define RC_ROCKER_VW_COEF      0.02f   // 摇杆控制自旋的增益
 // #define RC_PITCH_COEF          0.001f
 // #define RC_YAW_COEF            0.006f
@@ -29,10 +29,8 @@
 // #define YAW_ZERO               1100
 
 // --- 本地静态内存缓存 ---
-
-// Chassis_Cmd_t chassis_cmd = {0};
-// Gimbal_Cmd_t gimbal_cmd = {0};
-// Shoot_Cmd_t shoot_cmd = {0};
+Gimbal_Cmd_t gimbal_cmd = {0};
+Shoot_Cmd_t shoot_cmd = {0};
 //双板通讯
 C2G_t c2g = {0};
 // --- 私有函数声明 ---
@@ -69,17 +67,10 @@ void Robot_Cmd_Update(void)
  */
 static void Cmd_Handle_Safe_Mode(void)
 {
-    // chassis_cmd.mode = CHASSIS_CMD_SAFE;
-    // gimbal_cmd.mode  = GIMBAL_CMD_SAFE;
-    // shoot_cmd.mode   = SHOOT_CMD_SAFE;
-    //
-    // chassis_cmd.target_vx = 0.0f;
-    // chassis_cmd.target_vy = 0.0f;
-    // chassis_cmd.target_vw = 0.0f;
-    //
-    // shoot_cmd.friction_rpm   = 0.0f;
-    // shoot_cmd.trigger_single = false;
-    // shoot_cmd.trigger_auto   = false;
+    gimbal_cmd.mode  = GIMBAL_CMD_SAFE;
+    shoot_cmd.mode   = SHOOT_CMD_SAFE;
+
+    shoot_cmd.target_spring  = 0;
 }
 
 /**
@@ -87,43 +78,22 @@ static void Cmd_Handle_Safe_Mode(void)
  */
 static void Cmd_Update_Remote_Ctrl(void)
 {
-    // int16_t relative_angle = YAW_ZERO - gimbal_motors.DM4310_Yaw.Angle_now;
-    // chassis_cmd.offset_angle = normalize_to_pi((float)relative_angle * ENCODER_TO_RAD);;
+    gimbal_cmd.mode = GIMBAL_CMD_MANUAL;
+    shoot_cmd.mode = SHOOT_CMD_WORK;
 
-    // chassis_cmd.target_vx = (float)g2c.vx * 0.01f;
-    // chassis_cmd.target_vy = (float)g2c.vy * 0.01f;
-    // chassis_cmd.mode = CHASSIS_CMD_FOLLOW;
-    // if (g2c.vr != 0) {
-    //     chassis_cmd.mode = CHASSIS_CMD_SPIN;
-    //     chassis_cmd.target_vw = (float)g2c.vr * 0.01f;
-    // }
-    // chassis_cmd.is_cap_on = true;
+    shoot_cmd.target_spring = DBUS.Remote.CH1 * RC_ROCKER_SPRING_COEF;
 }
 
 /**
- * @brief 键鼠模式
+ * @brief 裁判系统自动模式
  */
 static void Cmd_Update_Mouse_Key(void)
 {
-    // chassis_cmd.target_vx = (float)g2c.vx * KB_WASD_COEF;
-    // chassis_cmd.target_vy = (float)g2c.vy * KB_WASD_COEF;
-    // float active_vw       = (DBUS.KeyBoard.E - DBUS.KeyBoard.Q) * 3.0f + DBUS.Mouse.X_Flt * RC_ROCKER_VW_COEF;
-    //
-    // if (DBUS.KeyBoard.Shift) {
-    //     chassis_cmd.mode = CHASSIS_CMD_SPIN;
-    //     chassis_cmd.target_vw = 5.0f;
-    // } else if (active_vw != 0.0f) {
-    //     chassis_cmd.mode = CHASSIS_CMD_FREE;
-    //     chassis_cmd.target_vw = active_vw;
-    // } else {
-    //     chassis_cmd.mode = CHASSIS_CMD_FOLLOW;
-    //     chassis_cmd.target_vw = 0.0f;
-    // }
-    // chassis_cmd.is_cap_on = g2c.key_v;
+
 }
 
 /**
- * @brief 双板数据同步逻辑
+ * @brief 视觉数据同步逻辑
  */
 static void Cmd_DualBoard_Sync(void)
 {

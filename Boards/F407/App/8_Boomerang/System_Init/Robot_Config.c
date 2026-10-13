@@ -47,13 +47,13 @@ OFFLINE_NODE(&cap.get.offline, CAP_OFFLINE_TIME, GROUP_NONE);
 CAN_RX_NODE(CAN1, 0x231, &g2c, DualBoard_CAN_Rx_Callback);
 
 CAN_RX_NODE(CAN1, 0x206, &boomerang_motors.DJI_3508_Pull, DJI_Motor_Resolve);
-OFFLINE_NODE(&boomerang_motors.DJI_3508_Pull.offline, MOTOR_OFFLINE_TIME, CHASSIS);
+OFFLINE_NODE(&boomerang_motors.DJI_3508_Pull.offline, MOTOR_OFFLINE_TIME, SHOOT);
 
 CAN_RX_NODE(CAN1, 0x201, &boomerang_motors.DJI_2006_Yaw, DJI_Motor_Resolve);
-OFFLINE_NODE(&boomerang_motors.DJI_2006_Yaw.offline, MOTOR_OFFLINE_TIME, CHASSIS);
+OFFLINE_NODE(&boomerang_motors.DJI_2006_Yaw.offline, MOTOR_OFFLINE_TIME, GIMBAL);
 
 CAN_RX_NODE(CAN1, 0x209, &boomerang_motors.DJI_6020_Turn, DJI_Motor_Resolve);
-OFFLINE_NODE(&boomerang_motors.DJI_6020_Turn.offline, MOTOR_OFFLINE_TIME, CHASSIS);
+OFFLINE_NODE(&boomerang_motors.DJI_6020_Turn.offline, MOTOR_OFFLINE_TIME, GIMBAL);
 
 // CAN_RX_NODE(CAN1, 0x301, &gimbal_motors.DM4310_Yaw, DM_1to4_Resolve);
 // OFFLINE_NODE(&gimbal_motors.DM4310_Yaw.offline, MOTOR_OFFLINE_TIME, GIMBAL);

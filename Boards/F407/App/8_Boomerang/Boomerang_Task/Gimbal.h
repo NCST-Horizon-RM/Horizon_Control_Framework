@@ -19,6 +19,8 @@ typedef struct
         {
             uint16_t act_time;
             uint8_t servo_ids[2];
+            uint8_t close_pwm;
+            uint8_t fire_pwm;
             uint16_t wait_encoder[2];
             uint16_t put1_encoder[2];
             uint16_t put2_encoder[2];
@@ -34,15 +36,16 @@ typedef struct
             int16_t dart3_put_encoder;
             int16_t dart4_grab_encoder;
             int16_t dart4_put_encoder;
-            int16_t increment_gimbal_encoder;
-        }Gimbal_Encoder;
-}Arm_Number;
+            int16_t increment_motor_encoder;
+        }Motor_Encoder;
+}Gimbal_Number;
 
 void Motor_Increment_Encoder(float target_angle);
-void Arm_Grab(uint8_t dart_number);
+void Gimbal_Grab(uint8_t dart_number);
 void Servo_Grab(uint8_t dart_number);
 void Dart_put();
 float Target_Ramp(float now, float target);
 void Servo_Put();
+uint32_t  Angle_To_CCR(float angle);
 
 #endif //HORIZON_CONTROL_FRAMEWORK_ARM_H
