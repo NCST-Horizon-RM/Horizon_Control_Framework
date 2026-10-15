@@ -2,9 +2,10 @@
 // Created by lemon on 2026/10/11.
 //
 
-#include "Gimbal.h"
+#include "Gimbal_Crtl.h"
 
-// uint8_t serial_servo_ids[] = {1, 2};
+
+
 
 Gimbal_Number gimbal_num = {
     .Servo_Encoder.act_time = 1000,
@@ -18,26 +19,70 @@ Gimbal_Number gimbal_num = {
     .Servo_Encoder.dart3_remove_encoder = {400, 550},
     .Servo_Encoder.dart4_adsorb_encoder = {120, 700},
     .Servo_Encoder.dart4_remove_encoder = {400, 550},
-    .Motor_Encoder.dart3_put_encoder = 3450,
-    .Motor_Encoder.dart3_grab_encoder = 4092,
-    .Motor_Encoder.dart4_put_encoder = 4500,
-    .Motor_Encoder.dart4_grab_encoder = 2829,
+    .Motor_Encoder.Turn_Encoder.dart3_put_encoder = 3450,
+    .Motor_Encoder.Turn_Encoder.dart3_grab_encoder = 4092,
+    .Motor_Encoder.Turn_Encoder.dart4_put_encoder = 4500,
+    .Motor_Encoder.Turn_Encoder.dart4_grab_encoder = 2829,
+    .Motor_Encoder.Yaw_Target.yaw_target = 0
 };
+
+static Gimbal_Ctrl_Block_t gimbal_ctrl;
+
+uint8_t Gimbal_Init()
+{
+    float PID_TURN_P[3] = {1.0f, 0.01f, 0.0f};
+    PID_Init(&gimbal_ctrl.Turn_P, 300.0f, 30.0f, PID_TURN_P,
+            0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
+    float PID_TURN_S[3] = {40.0f, 0.0f, 0.0f};
+    PID_Init(&gimbal_ctrl.Turn_S, 16000.0f, 10.0f, PID_TURN_S,
+            0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
+    float PID_YAW_P[3] = {-50.0f, -0.01f, 0.0f};
+    PID_Init(&gimbal_ctrl.Yaw_P, 700.0f, 10.0f, PID_YAW_P,
+            0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
+    float PID_YAW_S[3] = {20.0f, 0.0f, 0.5f};
+    PID_Init(&gimbal_ctrl.Yaw_S, 10000.0f, 0.0f, PID_YAW_S,
+            0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
+    //向系统下发云台当前状态，运行中
+    System_State_Report(ID_GIMBAL, STATUS_RUN);
+    return 1;
+}
+
+void Yaw_track()
+{
+    // 判断系统状态
+    bool is_system_locked = (sys_state.global_mode == GLOBAL_SAFE_LOCK ||
+                             sys_state.global_mode == GLOBAL_STANDBY ||
+                             sys_state.global_mode == GLOBAL_INIT_STAGE);
+
+    if (gimbal_cmd.mode == GIMBAL_CMD_SAFE || is_system_locked)
+    {
+        // 清空PID
+        for (int i = 0; i < 4; i++) {
+            PID_Clear(&gimbal_ctrl.Yaw_P );
+            PID_Clear(&gimbal_ctrl.Yaw_S );
+        }
+    }else
+    {
+        gimbal_ctrl.Yaw_P.Ref = gimbal_cmd.target_yaw;
+        PID_Calculate(&gimbal_ctrl.Yaw_P,-(vision_rx_cmd.Data.x0),gimbal_ctrl.Yaw_P.Ref);
+        PID_Calculate(&gimbal_ctrl.Yaw_S,dart_rack_motors.DJI_2006_Yaw.Speed_now,gimbal_ctrl.Yaw_P.Output);
+    }
+}
 
 void Gimbal_Grab(uint8_t dart_number)
 {
     switch (dart_number)
     {
         case 3:
-            Motor_Increment_Encoder(gimbal_num.Motor_Encoder.dart3_grab_encoder);
+            Motor_Increment_Encoder(gimbal_num.Motor_Encoder.Turn_Encoder.dart3_grab_encoder);
             Servo_Grab(dart_number);
-            Motor_Increment_Encoder(gimbal_num.Motor_Encoder.dart3_put_encoder);
+            Motor_Increment_Encoder(gimbal_num.Motor_Encoder.Turn_Encoder.dart3_put_encoder);
         break;
 
         case 4:
-            Motor_Increment_Encoder(gimbal_num.Motor_Encoder.dart4_grab_encoder);
+            Motor_Increment_Encoder(gimbal_num.Motor_Encoder.Turn_Encoder.dart4_grab_encoder);
             Servo_Grab(dart_number);
-            Motor_Increment_Encoder(gimbal_num.Motor_Encoder.dart4_put_encoder);
+            Motor_Increment_Encoder(gimbal_num.Motor_Encoder.Turn_Encoder.dart4_put_encoder);
         break;
     }
 }
@@ -47,14 +92,14 @@ void Motor_Increment_Encoder(float target_angle)
     while (1)
     {
         // 1. 计算目标值（带缓启动）
-        gimbal_num.Motor_Encoder.increment_motor_encoder =
-            Target_Ramp((float)boomerang_motors.DJI_6020_Turn.Angle_Infinite, target_angle);
+        gimbal_num.Motor_Encoder.Turn_Encoder.increment_motor_encoder =
+            Target_Ramp((float)dart_rack_motors.DJI_6020_Turn.Angle_Infinite, target_angle);
 
         // 2. 延时，给RTOS调度
         osDelay(1);
 
         // 3. 判断是否到达目标
-        if (fabsf(boomerang_motors.DJI_6020_Turn.Angle_Infinite - target_angle) < 25.0f)
+        if (fabsf(dart_rack_motors.DJI_6020_Turn.Angle_Infinite - target_angle) < 25.0f)
         {
             break;
         }

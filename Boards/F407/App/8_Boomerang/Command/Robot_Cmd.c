@@ -11,7 +11,9 @@
 #include "VT13.h"
 #include "dsp/fast_math_functions.h"
 #include "DualBoard_Frame.h"
+#include "usbd_cdc_if.h"
 
+#define VISION_COMPENSATION       193      //视觉补偿
 // #define PITCH_MAX              25.0f
 // #define PITCH_MIN             -20.0f
 // #define FRICTION_MAX_RPM       6500.0f
@@ -31,13 +33,18 @@
 // --- 本地静态内存缓存 ---
 Gimbal_Cmd_t gimbal_cmd = {0};
 Shoot_Cmd_t shoot_cmd = {0};
+Door_Cmd_t door_cmd = {0};
+Vision_Tx_Cmd_t vision_tx_cmd = {0};
+Vision_Rx_Cmd_t vision_rx_cmd = {0};
 //双板通讯
 C2G_t c2g = {0};
 // --- 私有函数声明 ---
 static void Cmd_Handle_Safe_Mode(void);
 static void Cmd_Update_Remote_Ctrl(void);
-static void Cmd_Update_Mouse_Key(void);
-static void Cmd_DualBoard_Sync(void);
+static void Cmd_Update_Referee_Crtl(void);
+static void Cmd_Update_Vision_Ctrl_Yaw(void);
+static void Cmd_Vision_Sync(void);
+static void vision_offline();
 
 
 void Robot_Cmd_Init(void)
@@ -48,7 +55,7 @@ void Robot_Cmd_Init(void)
 void Robot_Cmd_Update(void)
 {
 
-    System_State_Report_Remote(g2c.romoteOnLine);//向系统状态模块传入遥控器在线状态
+    System_State_Report_Remote(DBUS.offline.is_online);//向系统状态模块传入遥控器在线状态
 
     if (sys_state.global_mode == GLOBAL_SAFE_LOCK ||
         sys_state.global_mode == GLOBAL_MODULE_ERROR ||
@@ -56,10 +63,18 @@ void Robot_Cmd_Update(void)
     {
         Cmd_Handle_Safe_Mode();
     }
-    Cmd_Update_Remote_Ctrl();
-
-    // 双板通信
-    Cmd_DualBoard_Sync();
+    if (Referee.game_status.game_progress > 1 &&
+        Referee.game_status.game_progress < 6)
+    {
+        Cmd_Update_Referee_Crtl();
+    }else
+    {
+        Cmd_Update_Remote_Ctrl();
+    }
+    //视觉追踪
+    Cmd_Update_Vision_Ctrl_Yaw();
+    // 视觉数据
+    Cmd_Vision_Sync();
 }
 
 /**
@@ -69,6 +84,7 @@ static void Cmd_Handle_Safe_Mode(void)
 {
     gimbal_cmd.mode  = GIMBAL_CMD_SAFE;
     shoot_cmd.mode   = SHOOT_CMD_SAFE;
+    vision_rx_cmd.mode  = VISION_CMD_SAFE;
 
     shoot_cmd.target_spring  = 0;
 }
@@ -78,36 +94,76 @@ static void Cmd_Handle_Safe_Mode(void)
  */
 static void Cmd_Update_Remote_Ctrl(void)
 {
-    gimbal_cmd.mode = GIMBAL_CMD_MANUAL;
     shoot_cmd.mode = SHOOT_CMD_WORK;
-
     shoot_cmd.target_spring = DBUS.Remote.CH1 * RC_ROCKER_SPRING_COEF;
 }
 
 /**
  * @brief 裁判系统自动模式
  */
-static void Cmd_Update_Mouse_Key(void)
+static void Cmd_Update_Referee_Crtl(void)
 {
+    static uint16_t dart_launch_opening_status_last = 0;
+    if (Referee.game_status.game_progress == 4)
+    {
+        if (Referee.dart_client_cmd.dart_launch_opening_status == 2 &&
+            dart_launch_opening_status_last == 0)
+        {
+            ++door_cmd.open_cnt;
+        }
+        dart_launch_opening_status_last = Referee.dart_client_cmd.dart_launch_opening_status;
+    }
 
+    switch (door_cmd.open_cnt)
+    {
+        case 1:
+        door_cmd.mode = DOOR_CMD_ROUND1;
+        break;
+        case 2:
+        door_cmd.mode = DOOR_CMD_ROUND2;
+        break;
+        default:
+        break;
+    }
+}
+
+/**
+ * @brief 视觉追踪独立函数
+ */
+static void Cmd_Update_Vision_Ctrl_Yaw(void)
+{
+    switch (vision_rx_cmd.mode)
+    {
+        case VISION_CMD_OFFLINE:
+        break;
+        case VISION_CMD_ONLINE:
+        gimbal_cmd.target_yaw = 0;
+        break;
+        case VISION_CMD_SAFE:
+        break;
+    }
 }
 
 /**
  * @brief 视觉数据同步逻辑
  */
-static void Cmd_DualBoard_Sync(void)
+static void Cmd_Vision_Sync(void)
 {
-    // c2g.heat_last  = Referee.power_heat_data.shooter_17mm_barrel_heat;
-    // c2g.cooling    = Referee.robot_status.shooter_barrel_cooling_value;
-    // c2g.level      = Referee.robot_status.robot_level;
-    // c2g.initial_s  = (uint8_t)roundf(Referee.shoot_data.initial_speed * 10);
-    // c2g.robot_HP   = Referee.robot_status.current_HP;
-    // c2g.heat_large = Referee.robot_status.shooter_barrel_heat_limit;
-    // c2g.self_color = (Referee.robot_status.robot_id == 103) ? 1 : 0;
-    //
-    // uint8_t buf[8];
-    // C2G_pack(&c2g, buf);
-    // CAN_Send_Msg(&hcan1, 0x232, buf, 8);
+    uint8_t i = 0;
+
+    vision_tx_cmd.Head_frame = 0xCD;
+    vision_tx_cmd.VisionState = Referee.dart_info.dart_selected_target;
+    vision_tx_cmd.End_frame = 0xDC;
+
+
+    vision_tx_cmd.data[i++] = vision_tx_cmd.Head_frame;
+
+    vision_tx_cmd.data[i++] = (uint8_t)(vision_tx_cmd.VisionState & 0xFF);
+    vision_tx_cmd.data[i++] = (uint8_t)((vision_tx_cmd.VisionState >> 8) & 0xFF);
+
+    vision_tx_cmd.data[i++] = vision_tx_cmd.End_frame;
+
+    CDC_Transmit_FS(vision_tx_cmd.data, sizeof(vision_tx_cmd.data));
 }
 
 /**
@@ -116,8 +172,28 @@ static void Cmd_DualBoard_Sync(void)
  * @param device_ptr CAN设备指针(hcan)
  * @param data 接收到的8字节数据指针
  */
-void DualBoard_CAN_Rx_Callback(void *instance, uint8_t *data)
+void Vision_CAN_Rx_Callback(void *instance, uint8_t *data)
 {
-    if (instance == NULL || data == NULL) return;
-    G2C_unpack(data, (G2C_t *)instance);
+
+}
+
+static void vision_offline()
+{
+    vision_rx_cmd.Data.OffCounter++;
+    if ( vision_rx_cmd.Data.OffCounter > 80)
+    {
+        vision_rx_cmd.Data.OffCounter = 80;
+        vision_rx_cmd.mode = VISION_CMD_OFFLINE;
+    }
+
+    else
+    {
+            if (vision_rx_cmd.Data.x1 == 0 && vision_rx_cmd.Data.x2 == 0)
+            {
+                vision_rx_cmd.mode = VISION_CMD_OFFLINE;
+            }
+        vision_rx_cmd.mode = VISION_CMD_ONLINE;
+    }
+
+    vision_rx_cmd.mode = VISION_CMD_SAFE;
 }

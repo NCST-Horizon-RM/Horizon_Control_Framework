@@ -13,8 +13,8 @@
 // 云台控制指令
 typedef enum {
     GIMBAL_CMD_SAFE = 0,     // 安全锁死
-    GIMBAL_CMD_MANUAL,       // 遥控器控制
-    GIMBAL_CMD_AUTO_AIM      // 裁判系统全自动控制
+    GIMBAL_CMD_ROUND1,       // 遥控器控制
+    GIMBAL_CMD_ROUND2      // 裁判系统全自动控制
 } Gimbal_Mode_e;
 
 typedef struct {
@@ -35,12 +35,55 @@ typedef struct {
     int32_t target_spring;
 } Shoot_Cmd_t;
 
+typedef enum {
+    DOOR_CMD_SAFE = 0,      // 安全锁死
+    DOOR_CMD_ROUND1,         // 闸门第一次开启
+    DOOR_CMD_ROUND2           // 闸门第二次开启
+} Door_Mode_e;
+
+typedef struct {
+    Door_Mode_e mode;
+    uint8_t open_cnt;
+} Door_Cmd_t;
+
+typedef enum {
+    VISION_CMD_SAFE = 0,      // 安全锁死
+    VISION_CMD_ONLINE,         // 离线
+    VISION_CMD_OFFLINE          // 在线
+} Vision_Mode_e;
+
+typedef struct {
+    Vision_Mode_e mode;
+    uint8_t OriginData[16];
+    struct Data
+    {
+        uint8_t Head_frame;
+        uint8_t End_frame;
+        int16_t x0;
+        int16_t x1;
+        int16_t y1;
+        int16_t x2;
+        int16_t y2;
+        uint16_t OffCounter; // 在线检测
+        uint8_t  isOnline;
+    } Data;
+} Vision_Rx_Cmd_t;
+
+typedef struct {
+    uint8_t data[4];
+    uint8_t Head_frame;
+    uint16_t VisionState;
+    uint8_t End_frame;
+} Vision_Tx_Cmd_t;
+
 extern Gimbal_Cmd_t  gimbal_cmd;
 extern Shoot_Cmd_t   shoot_cmd;
+extern Door_Cmd_t    door_cmd;
+extern Vision_Rx_Cmd_t vision_rx_cmd;
+extern Vision_Tx_Cmd_t vision_tx_cmd;
 
 void Robot_Cmd_Init(void);
 void Robot_Cmd_Update(void);
-
-void DualBoard_CAN_Rx_Callback(void *device_ptr, uint8_t *data);
+void Vision_CAN_Rx_Callback(void *instance, uint8_t *data);
 
 #endif //F4_FRAMEWORK_ROBOT_CMD_H

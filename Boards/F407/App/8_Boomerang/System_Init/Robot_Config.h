@@ -16,32 +16,18 @@
 #include "DualBoard_Frame.h"
 
 typedef struct __attribute__((aligned(4))){
-        DJI_MOTOR_DATA_Typedef DJI_3508_Pull;
+        DJI_MOTOR_DATA_Typedef DJI_3508_SPRING;
         DJI_MOTOR_DATA_Typedef DJI_2006_Yaw;
         DJI_MOTOR_DATA_Typedef DJI_6020_Turn;
-} Boomerang_Motor_Group_t;
+} Dart_Rack_Motor_Group_t;
 
-// typedef struct __attribute__((aligned(4))){
-//     DJI_MOTOR_DATA_Typedef DJI_3508_Chassis[4];
-// } Chassis_Motor_Group_t;
-//
-// typedef struct __attribute__((aligned(4))){
-//     DM_MOTOR_DATA_Typedef DM4310_Yaw;
-// } Gimbal_Motor_Group_t;
-//
-// typedef struct __attribute__((aligned(4))){
-// } Shoot_Motor_Group_t;
-
-// extern Chassis_Motor_Group_t chassis_motors;
-// extern Gimbal_Motor_Group_t  gimbal_motors;
-// extern Shoot_Motor_Group_t   shoot_motors;
 
 extern Referee_Data_t Referee;
 extern DBUS_Typedef   DBUS;
 extern VT13_Typedef   VT13;
 extern Cap_t          cap;
 extern G2C_t          g2c;
-extern Boomerang_Motor_Group_t boomerang_motors;
+extern Dart_Rack_Motor_Group_t dart_rack_motors;
 
 extern BSP_PWM_t imu_heater_pwm;
 
