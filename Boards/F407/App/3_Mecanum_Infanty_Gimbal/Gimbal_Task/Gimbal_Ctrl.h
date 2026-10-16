@@ -12,6 +12,7 @@ typedef struct {
     PID_t Pitch_S;
     PID_t Yaw_P;
     PID_t Yaw_S;
+    float real_yaw_target;
 } Gimbal_Ctrl_Block_t;
 uint8_t Gimbal_Control_Init(void);
 void Gimbal_Control_Task(const Gimbal_Motor_Group_t *g_motor,const IMU_Data_t *g_imu);

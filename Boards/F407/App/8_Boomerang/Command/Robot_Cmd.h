@@ -8,7 +8,16 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// 云台控制指令
+typedef enum {
+    CHASSIS_CMD_SAFE = 0,     // 安全锁死
+    CHASSIS_CMD_WORK      // 裁判系统全自动控制
+} Chassis_Mode_e;
 
+typedef struct {
+    Chassis_Mode_e mode;
+    int32_t target_yaw;
+} Chassis_Cmd_t;
 
 // 云台控制指令
 typedef enum {
@@ -20,7 +29,6 @@ typedef enum {
 typedef struct {
     Gimbal_Mode_e mode;
     int16_t target_arm;
-    int32_t target_yaw;
 } Gimbal_Cmd_t;
 
 // 发射机构控制指令
@@ -76,6 +84,7 @@ typedef struct {
     uint8_t End_frame;
 } Vision_Tx_Cmd_t;
 
+extern Chassis_Cmd_t chassis_cmd;
 extern Gimbal_Cmd_t  gimbal_cmd;
 extern Shoot_Cmd_t   shoot_cmd;
 extern Door_Cmd_t    door_cmd;

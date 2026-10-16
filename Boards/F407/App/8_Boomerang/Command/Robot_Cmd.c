@@ -31,20 +31,19 @@
 // #define YAW_ZERO               1100
 
 // --- 本地静态内存缓存 ---
+Chassis_Cmd_t chassis_cmd = {0};
 Gimbal_Cmd_t gimbal_cmd = {0};
 Shoot_Cmd_t shoot_cmd = {0};
 Door_Cmd_t door_cmd = {0};
 Vision_Tx_Cmd_t vision_tx_cmd = {0};
 Vision_Rx_Cmd_t vision_rx_cmd = {0};
-//双板通讯
-C2G_t c2g = {0};
 // --- 私有函数声明 ---
 static void Cmd_Handle_Safe_Mode(void);
 static void Cmd_Update_Remote_Ctrl(void);
-static void Cmd_Update_Referee_Crtl(void);
+static void Cmd_Update_Referee_Ctrl(void);
 static void Cmd_Update_Vision_Ctrl_Yaw(void);
 static void Cmd_Vision_Sync(void);
-static void vision_offline();
+static void vision_isline();
 
 
 void Robot_Cmd_Init(void)
@@ -66,15 +65,18 @@ void Robot_Cmd_Update(void)
     if (Referee.game_status.game_progress > 1 &&
         Referee.game_status.game_progress < 6)
     {
-        Cmd_Update_Referee_Crtl();
+        Cmd_Update_Referee_Ctrl();
     }else
     {
         Cmd_Update_Remote_Ctrl();
     }
-    //视觉追踪
-    Cmd_Update_Vision_Ctrl_Yaw();
+
     // 视觉数据
     Cmd_Vision_Sync();
+    //视觉离线检测
+    vision_isline();
+    //视觉追踪
+    Cmd_Update_Vision_Ctrl_Yaw();
 }
 
 /**
@@ -82,6 +84,7 @@ void Robot_Cmd_Update(void)
  */
 static void Cmd_Handle_Safe_Mode(void)
 {
+    chassis_cmd.mode = CHASSIS_CMD_SAFE;
     gimbal_cmd.mode  = GIMBAL_CMD_SAFE;
     shoot_cmd.mode   = SHOOT_CMD_SAFE;
     vision_rx_cmd.mode  = VISION_CMD_SAFE;
@@ -101,7 +104,7 @@ static void Cmd_Update_Remote_Ctrl(void)
 /**
  * @brief 裁判系统自动模式
  */
-static void Cmd_Update_Referee_Crtl(void)
+static void Cmd_Update_Referee_Ctrl(void)
 {
     static uint16_t dart_launch_opening_status_last = 0;
     if (Referee.game_status.game_progress == 4)
@@ -137,7 +140,8 @@ static void Cmd_Update_Vision_Ctrl_Yaw(void)
         case VISION_CMD_OFFLINE:
         break;
         case VISION_CMD_ONLINE:
-        gimbal_cmd.target_yaw = 0;
+        chassis_cmd.mode = CHASSIS_CMD_WORK;
+        chassis_cmd.target_yaw = 0;
         break;
         case VISION_CMD_SAFE:
         break;
@@ -177,7 +181,7 @@ void Vision_CAN_Rx_Callback(void *instance, uint8_t *data)
 
 }
 
-static void vision_offline()
+static void vision_isline()
 {
     vision_rx_cmd.Data.OffCounter++;
     if ( vision_rx_cmd.Data.OffCounter > 80)

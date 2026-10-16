@@ -23,8 +23,6 @@ typedef struct
         {
             uint16_t act_time;
             uint8_t servo_ids[2];
-            uint8_t close_pwm;
-            uint8_t fire_pwm;
             uint16_t wait_encoder[2];
             uint16_t put1_encoder[2];
             uint16_t put2_encoder[2];
@@ -36,36 +34,26 @@ typedef struct
         //电机参数
         struct
         {
-            struct
-            {
                 int16_t dart3_grab_encoder;
                 int16_t dart3_put_encoder;
                 int16_t dart4_grab_encoder;
                 int16_t dart4_put_encoder;
                 int16_t increment_motor_encoder;
-            }Turn_Encoder;
-            struct
-            {
-                int16_t yaw_target;
-            }Yaw_Target;
         }Motor_Encoder;
 }Gimbal_Number;
 
 typedef struct {
     PID_t Turn_P;
     PID_t Turn_S;
-    PID_t Yaw_P;
-    PID_t Yaw_S;
-    float real_yaw_target;
+    Gimbal_Number gimbal_num;
 } Gimbal_Ctrl_Block_t;
 
-void Motor_Increment_Encoder(float target_angle);
-void Gimbal_Grab(uint8_t dart_number);
-void Servo_Grab(uint8_t dart_number);
+uint8_t Gimbal_Init();
+void Arm_Motor_Increment_Encoder(float target_angle);
+void Arm_Grab(uint8_t dart_number);
+void Arm_Servo_Grab(uint8_t dart_number);
 void Dart_put();
-float Target_Ramp(float now, float target);
-void Servo_Put();
-uint32_t  Angle_To_CCR(float angle);
+void Arm_Servo_Put();
 void Yaw_track();
 
 #endif //HORIZON_CONTROL_FRAMEWORK_ARM_H

@@ -16,6 +16,7 @@
 #define CMD_SERVO_MOVE      0x03
 #define CMD_GET_BATTERY     0x0F
 #define RX_BUF_SIZE 32
+
 void ServoMove(uint8_t id, uint16_t angle, uint16_t time_ms);
 void ServoMoveMulti(uint8_t num_servos, uint8_t *ids, uint16_t *angles, uint16_t time_ms);
 
