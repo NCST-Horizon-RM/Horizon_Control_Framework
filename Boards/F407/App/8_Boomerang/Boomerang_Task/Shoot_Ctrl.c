@@ -4,7 +4,7 @@
 
 #include "Shoot_Ctrl.h"
 
-
+static void Auto_Move();
 
 Shoot_Ctrl_Block_t shoot_ctrl ={
     .close_pwm = 60,
@@ -37,33 +37,44 @@ void Spring_move()
         PID_Clear(&shoot_ctrl.Spring_S);
     }else
     {
-        shoot_ctrl.pin_switch_down = HAL_GPIO_ReadPin(GPIOF, GPIO_PIN_0);
-        shoot_ctrl.pin_switch_up = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_14);
-        switch(shoot_ctrl.pin_switch_down)
+        if (shoot_cmd.mode == SHOOT_CMD_AUTO)
+        {
+            Auto_Move();
+        }else if (shoot_cmd.mode == SHOOT_CMD_REMOTE)
+        {
+            shoot_ctrl.spring_target_speed = shoot_cmd.target_spring;
+        }
+        PID_Calculate(&shoot_ctrl.Spring_S,dart_rack_motors.DJI_3508_SPRING.Speed_now,shoot_ctrl.spring_target_speed);
+    }
+}
+
+static void Auto_Move()
+{
+    shoot_ctrl.pin_switch_down = HAL_GPIO_ReadPin(GPIOF, GPIO_PIN_0);
+    shoot_ctrl.pin_switch_up = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_14);
+    switch(shoot_ctrl.pin_switch_down)
+    {
+    case 1:
+        shoot_ctrl.shoot_state = SHOOT_MOVING;
+        shoot_ctrl.spring_target_speed =-2500;
+        break;
+    case 0:
+        switch(shoot_ctrl.pin_switch_up)
         {
         case 1:
             shoot_ctrl.shoot_state = SHOOT_MOVING;
-            shoot_ctrl.spring_target_speed =-2500.0;
+            shoot_ctrl.spring_target_speed =7000;
             break;
         case 0:
-            switch(shoot_ctrl.pin_switch_up)
-            {
-            case 1:
-                shoot_ctrl.shoot_state = SHOOT_MOVING;
-                shoot_ctrl.spring_target_speed =7000.0;
-                break;
-            case 0:
-                shoot_ctrl.spring_target_speed =0;
-                shoot_ctrl.shoot_state = APPROVE_FIRE;
-                break;
-            default:
-                break;
-            }
+            shoot_ctrl.spring_target_speed =0;
+            shoot_ctrl.shoot_state = APPROVE_FIRE;
             break;
         default:
             break;
         }
-        PID_Calculate(&shoot_ctrl.Spring_S,dart_rack_motors.DJI_3508_SPRING.Speed_now,shoot_ctrl.spring_target_speed);
+        break;
+    default:
+        break;
     }
 }
 

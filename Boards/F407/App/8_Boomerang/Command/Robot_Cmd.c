@@ -65,9 +65,11 @@ void Robot_Cmd_Update(void)
     if (Referee.game_status.game_progress > 1 &&
         Referee.game_status.game_progress < 6)
     {
+        door_cmd.mode = DOOR_CMD_GAMEING;
         Cmd_Update_Referee_Ctrl();
     }else
     {
+        door_cmd.mode = DOOR_CMD_GAMEOVER;
         Cmd_Update_Remote_Ctrl();
     }
 
@@ -97,7 +99,10 @@ static void Cmd_Handle_Safe_Mode(void)
  */
 static void Cmd_Update_Remote_Ctrl(void)
 {
-    shoot_cmd.mode = SHOOT_CMD_WORK;
+    chassis_cmd.mode = CHASSIS_CMD_WORK;
+    gimbal_cmd.mode = GIMBAL_CMD_WORK;
+    shoot_cmd.mode = SHOOT_CMD_REMOTE;
+
     shoot_cmd.target_spring = DBUS.Remote.CH1 * RC_ROCKER_SPRING_COEF;
 }
 
@@ -109,6 +114,9 @@ static void Cmd_Update_Referee_Ctrl(void)
     static uint16_t dart_launch_opening_status_last = 0;
     if (Referee.game_status.game_progress == 4)
     {
+        chassis_cmd.mode = CHASSIS_CMD_WORK;
+        gimbal_cmd.mode = GIMBAL_CMD_WORK;
+        shoot_cmd.mode = SHOOT_CMD_AUTO;
         if (Referee.dart_client_cmd.dart_launch_opening_status == 2 &&
             dart_launch_opening_status_last == 0)
         {
@@ -140,7 +148,7 @@ static void Cmd_Update_Vision_Ctrl_Yaw(void)
         case VISION_CMD_OFFLINE:
         break;
         case VISION_CMD_ONLINE:
-        chassis_cmd.mode = CHASSIS_CMD_WORK;
+        chassis_cmd.mode = GIMBAL_CMD_WORK;
         chassis_cmd.target_yaw = 0;
         break;
         case VISION_CMD_SAFE:

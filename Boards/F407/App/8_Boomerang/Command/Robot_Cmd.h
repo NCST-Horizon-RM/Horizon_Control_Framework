@@ -22,8 +22,7 @@ typedef struct {
 // 云台控制指令
 typedef enum {
     GIMBAL_CMD_SAFE = 0,     // 安全锁死
-    GIMBAL_CMD_ROUND1,       // 遥控器控制
-    GIMBAL_CMD_ROUND2      // 裁判系统全自动控制
+    GIMBAL_CMD_WORK
 } Gimbal_Mode_e;
 
 typedef struct {
@@ -34,8 +33,8 @@ typedef struct {
 // 发射机构控制指令
 typedef enum {
     SHOOT_CMD_SAFE = 0,      // 安全锁死，拉簧电机停转
-    SHOOT_CMD_WORK,         // 拉簧电机运行
-    SHOOT_CMD_FIRE           // 允许开火状态
+    SHOOT_CMD_REMOTE,         // 拉簧电机运行
+    SHOOT_CMD_AUTO
 } Shoot_Mode_e;
 
 typedef struct {
@@ -45,6 +44,8 @@ typedef struct {
 
 typedef enum {
     DOOR_CMD_SAFE = 0,      // 安全锁死
+    DOOR_CMD_GAMEOVER,
+    DOOR_CMD_GAMEING,
     DOOR_CMD_ROUND1,         // 闸门第一次开启
     DOOR_CMD_ROUND2           // 闸门第二次开启
 } Door_Mode_e;
