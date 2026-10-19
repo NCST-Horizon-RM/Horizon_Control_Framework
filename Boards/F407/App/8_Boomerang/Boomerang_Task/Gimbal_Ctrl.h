@@ -15,6 +15,8 @@
 #include "System_State.h"
 #include "Robot_Cmd.h"
 
+#define GIMBAL_MOTOR_MID 3435
+
 //飞镖机械臂各项参数
 typedef struct
 {

@@ -21,7 +21,7 @@ uint8_t Spring_Control_Init()
     return 1;
 }
 
-void Spring_move()
+void Spring_Move()
 {
     // 状态汇报
     if (!Is_Group_Online(SHOOT)) {
@@ -54,18 +54,19 @@ static void Auto_Move()
     shoot_ctrl.pin_switch_up = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_14);
     switch(shoot_ctrl.pin_switch_down)
     {
-    case 1:
+    case SET:
         shoot_ctrl.shoot_state = SHOOT_MOVING;
         shoot_ctrl.spring_target_speed =-2500;
         break;
-    case 0:
+    case RESET:
+        osDelay(25);
         switch(shoot_ctrl.pin_switch_up)
         {
-        case 1:
+        case SET:
             shoot_ctrl.shoot_state = SHOOT_MOVING;
             shoot_ctrl.spring_target_speed =7000;
             break;
-        case 0:
+        case RESET:
             shoot_ctrl.spring_target_speed =0;
             shoot_ctrl.shoot_state = APPROVE_FIRE;
             break;

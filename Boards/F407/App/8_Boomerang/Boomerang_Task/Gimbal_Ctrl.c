@@ -34,7 +34,7 @@ uint8_t Gimbal_Init()
     float PID_TURN_S[3] = {40.0f, 0.0f, 0.0f};
     PID_Init(&gimbal_ctrl.Turn_S, 16000.0f, 10.0f, PID_TURN_S,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    //向系统下发云台当前状态，运行中
+    //向系统下发云台当前状态，准备中
     System_State_Report(ID_GIMBAL, STATUS_PREPARING);
     return 1;
 }

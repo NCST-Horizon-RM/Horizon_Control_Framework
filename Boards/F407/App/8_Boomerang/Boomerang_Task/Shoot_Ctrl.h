@@ -29,6 +29,8 @@ typedef struct
 
 extern Shoot_Ctrl_Block_t shoot_ctrl;
 
+void Spring_Move();
+uint8_t Spring_Control_Init();
 void Dart_Fire(void);
 uint32_t  Angle_To_CCR(float angle);
 

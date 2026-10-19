@@ -10,8 +10,14 @@
 #include "Yaw_Ctrl.h"
 
 typedef enum {
-    SHOOT_MOVING = 0,
-    APPROVE_FIRE
-} rack_State_e;
+    FIRE_STATE1 = 0,
+    FIRE_STATE2,
+    FIRE_STATE3,
+    FIRE_STATE3_HALF,
+    FIRE_STATE4,
+    STOP_FIRE
+} Rack_State_e;
+
+void Rack_Task();
 
 #endif //HORIZON_CONTROL_FRAMEWORK_RACK_CTRL_H

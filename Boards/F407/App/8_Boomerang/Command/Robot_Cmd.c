@@ -148,7 +148,7 @@ static void Cmd_Update_Vision_Ctrl_Yaw(void)
         case VISION_CMD_OFFLINE:
         break;
         case VISION_CMD_ONLINE:
-        chassis_cmd.mode = GIMBAL_CMD_WORK;
+        chassis_cmd.mode = CHASSIS_CMD_WORK;
         chassis_cmd.target_yaw = 0;
         break;
         case VISION_CMD_SAFE:

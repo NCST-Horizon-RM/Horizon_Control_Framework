@@ -47,7 +47,8 @@ typedef enum {
     DOOR_CMD_GAMEOVER,
     DOOR_CMD_GAMEING,
     DOOR_CMD_ROUND1,         // 闸门第一次开启
-    DOOR_CMD_ROUND2           // 闸门第二次开启
+    DOOR_CMD_ROUND2,          // 闸门第二次开启
+    DOOR_CMD_NONE
 } Door_Mode_e;
 
 typedef struct {
