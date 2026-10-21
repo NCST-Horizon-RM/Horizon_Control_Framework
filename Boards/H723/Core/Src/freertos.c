@@ -26,6 +26,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "timers.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,6 +46,33 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+#define RTOS_SNAPSHOT_CAPACITY 8U
+
+typedef struct {
+  char name[configMAX_TASK_NAME_LEN];
+  uint32_t number;
+  uint32_t handle;
+  uint32_t state;
+  uint32_t priority;
+  uint32_t base_priority;
+  uint32_t stack_free_words;
+  uint32_t runtime_count;
+  uint32_t stack_total_bytes;
+} RtosSnapshotEntry;
+
+typedef struct {
+  uint32_t sequence;
+  uint32_t tick;
+  uint32_t count;
+  uint32_t overflow;
+  uint32_t free_heap_bytes;
+  uint32_t min_free_heap_bytes;
+  uint32_t runtime_total;
+  RtosSnapshotEntry tasks[RTOS_SNAPSHOT_CAPACITY];
+} RtosSnapshot;
+
+volatile RtosSnapshot g_rtos_snapshot;
+static TaskStatus_t rtos_task_status[RTOS_SNAPSHOT_CAPACITY];
 
 /* USER CODE END Variables */
 /* Definitions for IMU */
@@ -82,9 +110,17 @@ const osThreadAttr_t Task02_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityNormal2,
 };
+/* Definitions for RtosSnapshot */
+osThreadId_t RtosSnapshotHandle;
+const osThreadAttr_t RtosSnapshot_attributes = {
+  .name = "RtosSnapshot",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
+static uint32_t RtosStackSizeBytes(TaskHandle_t handle);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -93,6 +129,7 @@ void Motor_Task(void *argument);
 void Command_Task(void *argument);
 void StartTask01(void *argument);
 void StartTask02(void *argument);
+void RtosSnapshotTask(void *argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -137,6 +174,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of Task02 */
   Task02Handle = osThreadNew(StartTask02, NULL, &Task02_attributes);
+
+  /* creation of RtosSnapshot */
+  RtosSnapshotHandle = osThreadNew(RtosSnapshotTask, NULL, &RtosSnapshot_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -240,8 +280,90 @@ __weak void StartTask02(void *argument)
   /* USER CODE END StartTask02 */
 }
 
+/* USER CODE BEGIN Header_RtosSnapshotTask */
+/**
+* @brief Function implementing the RtosSnapshot thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_RtosSnapshotTask */
+__weak void RtosSnapshotTask(void *argument)
+{
+  /* USER CODE BEGIN RtosSnapshotTask */
+  TickType_t last_wake = xTaskGetTickCount();
+
+  for (;;) {
+    vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(125U));
+
+    vTaskSuspendAll();
+
+    UBaseType_t expected = uxTaskGetNumberOfTasks();
+    UBaseType_t count = 0;
+    uint32_t total_runtime = 0;
+
+    g_rtos_snapshot.sequence++;
+    __DMB();
+
+    if (expected <= RTOS_SNAPSHOT_CAPACITY) {
+      count = uxTaskGetSystemState(
+          rtos_task_status,
+          RTOS_SNAPSHOT_CAPACITY,
+          &total_runtime);
+    }
+
+    g_rtos_snapshot.tick = xTaskGetTickCount();
+    g_rtos_snapshot.count = count;
+    g_rtos_snapshot.overflow = (count != expected) ? 1U : 0U;
+    g_rtos_snapshot.free_heap_bytes = xPortGetFreeHeapSize();
+    g_rtos_snapshot.min_free_heap_bytes =
+        xPortGetMinimumEverFreeHeapSize();
+    g_rtos_snapshot.runtime_total = total_runtime;
+
+    for (UBaseType_t index = 0; index < count; index++) {
+      const TaskStatus_t *source = &rtos_task_status[index];
+      volatile RtosSnapshotEntry *target =
+          &g_rtos_snapshot.tasks[index];
+
+      target->number = source->xTaskNumber;
+      target->handle = (uint32_t)(uintptr_t)source->xHandle;
+      target->state = (uint32_t)source->eCurrentState;
+      target->priority = source->uxCurrentPriority;
+      target->base_priority = source->uxBasePriority;
+      target->stack_free_words = source->usStackHighWaterMark;
+      target->runtime_count = source->ulRunTimeCounter;
+      target->stack_total_bytes = RtosStackSizeBytes(source->xHandle);
+
+      uint32_t name_index = 0;
+      while (name_index < configMAX_TASK_NAME_LEN - 1U &&
+             source->pcTaskName[name_index] != '\0') {
+        target->name[name_index] = source->pcTaskName[name_index];
+        name_index++;
+      }
+      target->name[name_index] = '\0';
+    }
+
+    __DMB();
+    g_rtos_snapshot.sequence++;
+
+    (void)xTaskResumeAll();
+  }
+  /* USER CODE END RtosSnapshotTask */
+}
+
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+static uint32_t RtosStackSizeBytes(TaskHandle_t handle)
+{
+  if (handle == (TaskHandle_t)IMUHandle) return IMU_attributes.stack_size;
+  if (handle == (TaskHandle_t)MotorHandle) return Motor_attributes.stack_size;
+  if (handle == (TaskHandle_t)CommandHandle) return Command_attributes.stack_size;
+  if (handle == (TaskHandle_t)Task01Handle) return Task01_attributes.stack_size;
+  if (handle == (TaskHandle_t)Task02Handle) return Task02_attributes.stack_size;
+  if (handle == (TaskHandle_t)RtosSnapshotHandle) return RtosSnapshot_attributes.stack_size;
+  if (handle == xTaskGetIdleTaskHandle()) return configMINIMAL_STACK_SIZE * sizeof(StackType_t);
+  if (handle == xTimerGetTimerDaemonTaskHandle()) return configTIMER_TASK_STACK_DEPTH * sizeof(StackType_t);
+  return 0;
+}
 
 /* USER CODE END Application */
 

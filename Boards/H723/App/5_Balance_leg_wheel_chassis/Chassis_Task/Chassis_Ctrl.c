@@ -24,7 +24,6 @@
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
 static uint16_t save_cnt = 0;
-static uint16_t jump_cnt = 0;
 Chassis_Control_Mode_t MODE;
 
 //功率控制

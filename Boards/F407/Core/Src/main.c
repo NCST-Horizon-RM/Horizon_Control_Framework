@@ -117,8 +117,10 @@ int main(void)
   MX_I2C3_Init();
   MX_TIM1_Init();
   MX_TIM8_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   MX_USB_DEVICE_Init();
+  HAL_TIM_Base_Start(&htim2);
   System_Init();
   /* USER CODE END 2 */
 
