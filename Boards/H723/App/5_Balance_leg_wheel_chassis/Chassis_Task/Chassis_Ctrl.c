@@ -93,7 +93,7 @@ uint8_t Chassis_Control_Init()
     float PID_Follow_Pos[3] = {10.0f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Pos, 15.0f, 0.0f, PID_Follow_Pos,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_Follow_Spd[3] = {1.5f,   0.0f,   0.0f};
+    float PID_Follow_Spd[3] = {1.0f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Vel, 8.0f, 1.0f, PID_Follow_Spd,
              0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
 
