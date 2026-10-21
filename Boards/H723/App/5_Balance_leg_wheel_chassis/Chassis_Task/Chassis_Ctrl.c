@@ -80,15 +80,6 @@ uint8_t Chassis_Control_Init()
     Contact_Detector_Init(&chassis_ctrl.contact_left,0);
     Contact_Detector_Init(&chassis_ctrl.contact_right,0);
 
-    float pid_joint_pos[3] = {8.0f, 0.0f, 0.0f};
-    float pid_joint_vel[3] = {12.0f, 0.0f, 0.0f};
-    for (int i = 0; i < 4; i++) {
-        PID_Init(&chassis_ctrl.joint_pos[i], 3.5f, 0.0f,
-            pid_joint_pos, 0, 0, 0, 0, 0, 0);
-        PID_Init(&chassis_ctrl.joint_vel[i], 6.0f, 0.0f,
-            pid_joint_vel, 0, 0, 0, 0, 0, 0);
-    }
-
     // 底盘跟随PID初始化
     float PID_Follow_Pos[3] = {10.0f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Pos, 15.0f, 0.0f, PID_Follow_Pos,
@@ -116,10 +107,7 @@ uint8_t Chassis_Control_Init()
     return 1;
 }
 
-float left_front_target;
-float left_back_target;
-float right_front_target;
-float right_back_target;
+float pitch_rael;
 /**
  * @brief 底盘控制任务
  */
@@ -138,7 +126,12 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
         chassis_cmd.mode == CHASSIS_CMD_FOLLOW;
 
     /* Keep feedback kinematics alive even while outputs are safety-locked. */
-    const float pitch = (imu != NULL) ? imu->pitch * DEG2RAD : 0.0f;
+    // q0 为四元数标量项，四元数已归一化
+    float sin_tilt = 2.0f * (imu->q[0]*imu->q[2] - imu->q[1]*imu->q[3]);
+    float cos_tilt = 1.0f - 2.0f * (imu->q[1]*imu->q[1] + imu->q[2]*imu->q[2]);
+
+    pitch_rael = atan2f(sin_tilt, cos_tilt); // 弧度，±π
+    const float pitch = (imu != NULL) ? pitch_rael : 0.0f;
     VMC_Update(&chassis_ctrl.vmc, dt, pitch,
         l_motor->BM_P1010B_Leg[0].pos_rad,
         l_motor->BM_P1010B_Leg[2].pos_rad,
@@ -192,27 +185,9 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                     Chassis_ResetSupportController();
                     // Handle save mode
                     // 逆解关节电机目标
-                    VMC_InverseKinematics(&chassis_ctrl.vmc,0.15f,0,imu->pitch * DEG2RAD,&left_front_target,&left_back_target);
-                    VMC_InverseKinematics(&chassis_ctrl.vmc,0.15f,0,imu->pitch * DEG2RAD,&right_front_target,&right_back_target);
                     float pos_target[4];
                     // 关节电机目标值归一化
-                    pos_target[0] = l_motor->BM_P1010B_Leg[0].pos_single +
-                                    normalize_to_pi(left_front_target - l_motor->BM_P1010B_Leg[0].pos_rad);
-                    pos_target[2] = l_motor->BM_P1010B_Leg[2].pos_single +
-                                    normalize_to_pi(left_back_target - l_motor->BM_P1010B_Leg[2].pos_rad);
-                    pos_target[1] = l_motor->BM_P1010B_Leg[1].pos_single +
-                                    normalize_to_pi(-right_front_target - l_motor->BM_P1010B_Leg[1].pos_rad);
-                    pos_target[3] = l_motor->BM_P1010B_Leg[3].pos_single +
-                                    normalize_to_pi(-right_back_target - l_motor->BM_P1010B_Leg[3].pos_rad);
-                    for (int i=0;i<4;i++) {
-                        PID_Calculate(&chassis_ctrl.joint_pos[i],l_motor->BM_P1010B_Leg[i].pos_single,pos_target[i]);
-                        PID_Calculate(&chassis_ctrl.joint_vel[i],l_motor->BM_P1010B_Leg[i].vel_rad,chassis_ctrl.joint_pos[i].Output);
-                    }
-                    BM_Send_torque(&hfdcan2, 0x032, chassis_ctrl.joint_vel[0].Output,
-                    chassis_ctrl.joint_vel[1].Output,
-                    chassis_ctrl.joint_vel[2].Output,
-                    chassis_ctrl.joint_vel[3].Output);
-                        //BM_Send_torque(&hfdcan2, 0x032, 0,0,0,0);
+                    BM_Send_torque(&hfdcan2, 0x032, 0,0,0,0);
                     DJI_Motor_Send(&hfdcan1,0x200,0,0,0,0);
                     if (fabsf(chassis_ctrl.vmc.left.theta[0]) < 0.1f &&
                         fabsf(chassis_ctrl.vmc.right.theta[0]) < 0.1f &&
