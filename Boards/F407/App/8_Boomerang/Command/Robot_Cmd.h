@@ -16,7 +16,7 @@ typedef enum {
 
 typedef struct {
     Chassis_Mode_e mode;
-    int32_t target_yaw;
+    float target_yaw;
 } Chassis_Cmd_t;
 
 // 云台控制指令
@@ -27,7 +27,7 @@ typedef enum {
 
 typedef struct {
     Gimbal_Mode_e mode;
-    int16_t target_arm;
+    float target_arm;
 } Gimbal_Cmd_t;
 
 // 发射机构控制指令
@@ -39,7 +39,7 @@ typedef enum {
 
 typedef struct {
     Shoot_Mode_e mode;
-    int32_t target_spring;
+    float target_spring;
 } Shoot_Cmd_t;
 
 typedef enum {

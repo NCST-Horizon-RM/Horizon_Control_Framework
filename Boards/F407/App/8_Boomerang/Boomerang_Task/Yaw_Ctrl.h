@@ -13,7 +13,7 @@ typedef struct
 {
     PID_t Yaw_P;
     PID_t Yaw_S;
-    int32_t yaw_target;
+    float yaw_target;
 } Yaw_Ctrl_Block_t;
 
 #endif //HORIZON_CONTROL_FRAMEWORK_YAW_CTRL_H

@@ -45,6 +45,7 @@ void Spring_Move()
             shoot_ctrl.spring_target_speed = shoot_cmd.target_spring;
         }
         PID_Calculate(&shoot_ctrl.Spring_S,dart_rack_motors.DJI_3508_SPRING.Speed_now,shoot_ctrl.spring_target_speed);
+        DJI_Motor_Send(&hcan1,0x200,(int16_t)shoot_ctrl.Spring_S.Output,0,0,0);
     }
 }
 

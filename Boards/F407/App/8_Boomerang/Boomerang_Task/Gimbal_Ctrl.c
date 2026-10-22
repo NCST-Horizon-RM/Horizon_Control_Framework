@@ -76,6 +76,8 @@ void Arm_Grab(uint8_t dart_number)
             Arm_Servo_Grab(dart_number);
             Arm_Motor_Increment_Encoder(gimbal_ctrl.gimbal_num.Motor_Encoder.dart4_put_encoder);
             break;
+        default:
+            break;
         }
     }
 }
@@ -90,6 +92,8 @@ void Arm_Motor_Increment_Encoder(float target_angle)
 
             PID_Calculate(&gimbal_ctrl.Turn_P,dart_rack_motors.DJI_6020_Turn.Angle_Infinite,gimbal_ctrl.gimbal_num.Motor_Encoder.increment_motor_encoder);
             PID_Calculate(&gimbal_ctrl.Turn_S,dart_rack_motors.DJI_6020_Turn.Speed_now,gimbal_ctrl.Turn_P.Output);
+
+            DJI_Motor_Send(&hcan2,0x1FE,(int16_t)gimbal_ctrl.Turn_S.Output,0,0,0);
 
             // 2. 延时，给RTOS调度
             osDelay(1);

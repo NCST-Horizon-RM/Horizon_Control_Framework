@@ -35,7 +35,7 @@ OFFLINE_NODE(&Referee.offline, REFEREE_OFFLINE_TIME, GROUP_NONE);
 CAN_RX_NODE(CAN1, 0x206, &dart_rack_motors.DJI_3508_SPRING, DJI_Motor_Resolve);
 OFFLINE_NODE(&dart_rack_motors.DJI_3508_SPRING.offline, MOTOR_OFFLINE_TIME, SHOOT);
 
-CAN_RX_NODE(CAN1, 0x201, &dart_rack_motors.DJI_2006_Yaw, DJI_Motor_Resolve);
+CAN_RX_NODE(CAN2, 0x201, &dart_rack_motors.DJI_2006_Yaw, DJI_Motor_Resolve);
 OFFLINE_NODE(&dart_rack_motors.DJI_2006_Yaw.offline, MOTOR_OFFLINE_TIME, GIMBAL);
 
 CAN_RX_NODE(CAN1, 0x209, &dart_rack_motors.DJI_6020_Turn, DJI_Motor_Resolve);

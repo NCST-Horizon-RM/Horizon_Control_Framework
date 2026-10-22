@@ -36,11 +36,11 @@ typedef struct
         //电机参数
         struct
         {
-                int16_t dart3_grab_encoder;
-                int16_t dart3_put_encoder;
-                int16_t dart4_grab_encoder;
-                int16_t dart4_put_encoder;
-                int16_t increment_motor_encoder;
+                float dart3_grab_encoder;
+                float dart3_put_encoder;
+                float dart4_grab_encoder;
+                float dart4_put_encoder;
+                float increment_motor_encoder;
         }Motor_Encoder;
 }Gimbal_Number;
 

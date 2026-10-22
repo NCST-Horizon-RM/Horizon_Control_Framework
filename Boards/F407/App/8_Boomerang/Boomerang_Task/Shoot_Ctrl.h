@@ -20,7 +20,7 @@ typedef struct
 {
     Shoot_State_e shoot_state;
     PID_t Spring_S;
-    int32_t spring_target_speed;
+    float spring_target_speed;
     uint8_t close_pwm;
     uint8_t fire_pwm;
     uint8_t pin_switch_down;
