@@ -29,6 +29,7 @@ void Rack_Task()
                         shoot_ctrl.shoot_state = SHOOT_MOVING;
                         rack_state = FIRE_STATE2;
                     }
+                break;
                 case FIRE_STATE2 :
                     Spring_Move();
                     if (shoot_ctrl.shoot_state == APPROVE_FIRE)
@@ -40,6 +41,7 @@ void Rack_Task()
                         shoot_ctrl.shoot_state = SHOOT_MOVING;
                         rack_state = FIRE_STATE3;
                     }
+                break;
                 case FIRE_STATE3 :
                     Spring_Move();
                     if (shoot_ctrl.shoot_state == APPROVE_FIRE)
@@ -49,8 +51,9 @@ void Rack_Task()
                         Arm_Grab(4);
                         rack_state = FIRE_STATE3_HALF;
                     }
+                break;
                 default:
-                    break;
+                break;
             }
         }else if (door_cmd.mode == DOOR_CMD_ROUND2)
         {

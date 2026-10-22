@@ -98,21 +98,21 @@
             }
         },
         {
-            "name": "F407-8_Boomerang-Debug",
+            "name": "F407-8_dart_rack-Debug",
             "inherits": "base",
             "toolchainFile": "${sourceDir}/Boards/F407/cmake/gcc-arm-none-eabi.cmake",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "ACTIVE_APP": "8_Boomerang"
+                "ACTIVE_APP": "8_dart_rack"
             }
         },
         {
-            "name": "F407-8_Boomerang-Release",
+            "name": "F407-8_dart_rack-Release",
             "inherits": "base",
             "toolchainFile": "${sourceDir}/Boards/F407/cmake/gcc-arm-none-eabi.cmake",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "ACTIVE_APP": "8_Boomerang"
+                "ACTIVE_APP": "8_dart_rack"
             }
         },
         {
@@ -194,12 +194,12 @@
             "configurePreset": "F407-5_Balance_leg_wheel_Gimbal-Release"
         },
         {
-            "name": "F407-8_Boomerang-Debug",
-            "configurePreset": "F407-8_Boomerang-Debug"
+            "name": "F407-8_dart_rack-Debug",
+            "configurePreset": "F407-8_dart_rack-Debug"
         },
         {
-            "name": "F407-8_Boomerang-Release",
-            "configurePreset": "F407-8_Boomerang-Release"
+            "name": "F407-8_dart_rack-Release",
+            "configurePreset": "F407-8_dart_rack-Release"
         },
         {
             "name": "H723-1_Catapult_Hero-Debug",
