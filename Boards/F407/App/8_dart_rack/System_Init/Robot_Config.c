@@ -2,6 +2,7 @@
 // Created by CaoKangqi on 2026/6/25.
 //
 #include "Offline_Detector.h"
+#include "BSP_USB.h"
 #include "BSP_UART.h"
 #include "BSP_CAN.h"
 #include "All_define.h"

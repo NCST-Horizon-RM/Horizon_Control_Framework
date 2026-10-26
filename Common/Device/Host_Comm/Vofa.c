@@ -7,6 +7,7 @@
 #include "usart.h"
 #include "usbd_cdc_if.h"
 #include "hal.h"
+#include "USB_Router.h"
 
 /**
  * @brief 内部底层发送路由函数
@@ -16,7 +17,7 @@ static void VOFA_Transmit(UART_HandleTypeDef *huart, uint8_t *data, uint16_t len
 {
     if (huart == NULL) {
         // 句柄为空，默认使用 USB CDC
-        CDC_Transmit(data, len);
+        (void)USB_SendCopy(USB_PORT_CDC1, data, len);
     } else {
         // 句柄不为空，使用指定的串口 DMA 发送
         HAL_UART_Transmit_DMA(huart, data, len);

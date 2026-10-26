@@ -122,6 +122,12 @@ SECTIONS
     PROVIDE(__stop_CAN_Reg_Sec = .);
     . = ALIGN(4);
 
+    /* USB CDC receive nodes */
+    PROVIDE(__start_USB_Reg_Sec = .);
+    KEEP(*(USB_Reg_Sec))
+    PROVIDE(__stop_USB_Reg_Sec = .);
+    . = ALIGN(4);
+
     /* 离线检测自动注册段 */
     PROVIDE(__start_Offline_Reg_Sec = .);
     KEEP(*(Offline_Reg_Sec))

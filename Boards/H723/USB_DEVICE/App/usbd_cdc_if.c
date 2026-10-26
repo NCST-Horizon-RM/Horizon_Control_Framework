@@ -22,7 +22,7 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+#include "BSP_USB.h"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -157,6 +157,7 @@ static int8_t CDC_Init_HS(void)
   /* Set Application Buffers */
   USBD_CDC_SetTxBuffer(&hUsbDeviceHS, UserTxBufferHS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceHS, UserRxBufferHS);
+  USB_LinkChangedISR(USB_PORT_CDC1, true, HAL_GetTick());
   return (USBD_OK);
   /* USER CODE END 8 */
 }
@@ -169,6 +170,8 @@ static int8_t CDC_Init_HS(void)
 static int8_t CDC_DeInit_HS(void)
 {
   /* USER CODE BEGIN 9 */
+  /* Native class teardown has already closed the endpoints. */
+  USB_LinkChangedISR(USB_PORT_CDC1, false, HAL_GetTick());
   return (USBD_OK);
   /* USER CODE END 9 */
 }
@@ -223,19 +226,26 @@ static int8_t CDC_Control_HS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   /* 6      | bDataBits  |   1   | Number Data bits (5, 6, 7, 8 or 16).          */
   /*******************************************************************************/
   case CDC_SET_LINE_CODING:
-
+      if (USB_SetLineCoding(USB_PORT_CDC1, pbuf, length) != USB_OK)
+        return USBD_FAIL;
     break;
 
   case CDC_GET_LINE_CODING:
-
+      if (USB_GetLineCoding(USB_PORT_CDC1, pbuf, length) != USB_OK)
+        return USBD_FAIL;
     break;
 
   case CDC_SET_CONTROL_LINE_STATE:
-
+      /* ST passes the setup request itself for requests with wLength == 0. */
+      if (pbuf == NULL) return USBD_FAIL;
+      USB_SetControlLinesISR(USB_PORT_CDC1,
+          ((((USBD_SetupReqTypedef *)pbuf)->wValue & 1U) != 0U),
+          ((((USBD_SetupReqTypedef *)pbuf)->wValue & 2U) != 0U));
     break;
 
   case CDC_SEND_BREAK:
-
+      if (pbuf == NULL) return USBD_FAIL;
+      USB_ReportBreakISR(USB_PORT_CDC1, ((USBD_SetupReqTypedef *)pbuf)->wValue);
     break;
 
   default:
@@ -264,8 +274,8 @@ static int8_t CDC_Control_HS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_HS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 11 */
-  USBD_CDC_SetRxBuffer(&hUsbDeviceHS, &Buf[0]);
-  USBD_CDC_ReceivePacket(&hUsbDeviceHS);
+  if (USB_RxPushISR(USB_PORT_CDC1, Buf, *Len, HAL_GetTick()) == USB_RX_REARM)
+    BSP_USB_RearmRx(Buf);
   return (USBD_OK);
   /* USER CODE END 11 */
 }
@@ -281,12 +291,7 @@ uint8_t CDC_Transmit_HS(uint8_t* Buf, uint16_t Len)
 {
   uint8_t result = USBD_OK;
   /* USER CODE BEGIN 12 */
-  USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceHS.pClassData;
-  if (hcdc->TxState != 0){
-    return USBD_BUSY;
-  }
-  USBD_CDC_SetTxBuffer(&hUsbDeviceHS, Buf, Len);
-  result = USBD_CDC_TransmitPacket(&hUsbDeviceHS);
+  result = BSP_USB_TransmitLegacy(Buf, Len);
   /* USER CODE END 12 */
   return result;
 }
@@ -307,7 +312,7 @@ static int8_t CDC_TransmitCplt_HS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
 {
   uint8_t result = USBD_OK;
   /* USER CODE BEGIN 14 */
-  UNUSED(Buf);
+  USB_TxCompleteISR(USB_PORT_CDC1, Buf, HAL_GetTick());
   UNUSED(Len);
   UNUSED(epnum);
   /* USER CODE END 14 */

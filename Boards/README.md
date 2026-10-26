@@ -18,6 +18,7 @@ Boards/<board>/
 │   ├── SPI/                    # SPI 抽象
 │   ├── TIM/                    # 定时器/PWM 抽象
 │   ├── UART/                   # 串口抽象
+│   ├── USB/                    # CDC 适配与通用接收节点接口
 │   ├── DWT/                    # 周期计数器计时
 │   └── Indicator/              # 指示灯(LED/WS2812)、蜂鸣器、System_Indicator
 ├── App/                        # 机器人型号(见第 3、4 节)
@@ -39,6 +40,7 @@ Boards/<board>/
 |---|---|
 | `BSP_CAN.h` | `hcan_t`、`CAN_Send_Msg`、`CAN_Config(hcan_t *, uint32_t fifo)`、`CAN_GetTxFreeLevel`、`CAN_RX_NODE` 宏、`BSP_CAN_Auto_Init`、`CAN_App_Frame_Dispatch`、`BSP_CAN_Register_Slot` |
 | `BSP_UART.h` | `UART_RX_NODE` 宏、`BSP_UART_Register_Slot`、`Auto_UART_Router_Init`、`UART_ReceiveToIdle_DMA` |
+| `BSP_USB.h` | `USB_RX_NODE`、`USB_SendCopy`、`USB_GetLinkState` 等公共接口；板级实现 `USB_Port.h` 的硬件适配 |
 | `BSP_SPI.h` | `BSP_SPI_RegisterIRQCallback` |
 | `BSP_TIM.h` | `BSP_PWM_t` 及 PWM 控制函数 |
 | `BSP_DWT.h` | `DWT_Init`、`DWT_GetDeltaT`、`DWT_SysTimeUpdate`、`DWT_Profile_*` |
@@ -49,7 +51,9 @@ Boards/<board>/
 1. `hcan_t` 为 CAN 句柄的中性别名,在 `BSP_CAN.h` 内以 `typedef` 映射到芯片实际的 CAN/FDCAN 句柄类型(如 `typedef FDCAN_HandleTypeDef hcan_t;`)。
 2. `hcan_t` 的 `typedef` 必须位于头文件**顶部**(`#include` 之后、任何使用该类型的声明之前),否则编译报 `unknown type name`。
 3. 引用 `hcan_t` 的头文件必须自行 `#include "BSP_CAN.h"`,不得依赖其它头文件传递。
-4. USB CDC 发送函数名因芯片而异(全速 `CDC_Transmit_FS`,高速 `CDC_Transmit_HS`),统一经 `Common/Utils/Inc/hal.h` 中的 `CDC_Transmit` 宏屏蔽差异。
+4. USB CDC 原生发送函数名因板卡而异(`CDC_Transmit_FS`、`CDC_Transmit_HS`)，统一经 `Common/Utils/Inc/hal.h` 中的 `CDC_Transmit` 宏屏蔽差异；新业务优先使用复制队列接口 `USB_SendCopy`。HS 函数后缀不代表实际配置了高速模式。
+
+CDC 节点注册、接收长度、拼帧模式、队列与事件用法见 [USB CDC 使用说明](../Common/System/Communication/USB_CDC_README.md)。新增板卡还需保留 `USB_Reg_Sec` 链接器段、接入 CDC 生命周期/收发回调，并在内核初始化后启动 `USB_ServiceStart()`。
 
 ## 3. 数据所有者约定
 
