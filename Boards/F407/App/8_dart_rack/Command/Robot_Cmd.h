@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 // 云台控制指令
 typedef enum {
@@ -62,21 +63,23 @@ typedef enum {
     VISION_CMD_OFFLINE          // 在线
 } Vision_Mode_e;
 
+typedef union
+{
+    uint8_t Data[2];
+    uint16_t Data_u16;
+}Vision_rx_union;
+
 typedef struct {
     Vision_Mode_e mode;
-    uint8_t OriginData[16];
-    struct Data
-    {
-        uint8_t Head_frame;
-        uint8_t End_frame;
-        int16_t x0;
-        int16_t x1;
-        int16_t y1;
-        int16_t x2;
-        int16_t y2;
-        uint16_t OffCounter; // 在线检测
-        uint8_t  isOnline;
-    } Data;
+    uint8_t Head_frame;
+    uint8_t End_frame;
+    int16_t x0;
+    int16_t x1;
+    int16_t y1;
+    int16_t x2;
+    int16_t y2;
+    uint16_t OffCounter; // 在线检测
+    uint8_t  isOnline;
 } Vision_Rx_Cmd_t;
 
 typedef struct {
@@ -95,6 +98,7 @@ extern Vision_Tx_Cmd_t vision_tx_cmd;
 
 void Robot_Cmd_Init(void);
 void Robot_Cmd_Update(void);
-void Vision_CAN_Rx_Callback(void *instance, uint8_t *data);
+bool Vision_USB_CheckFrame(const uint8_t *data, uint16_t size);
+void Vision_USB_Rx_Callback(uint8_t *data,void *device_ptr,uint16_t size);
 
 #endif //F4_FRAMEWORK_ROBOT_CMD_H

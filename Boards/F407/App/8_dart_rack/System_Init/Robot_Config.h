@@ -21,7 +21,6 @@ typedef struct __attribute__((aligned(4))){
         DJI_MOTOR_DATA_Typedef DJI_6020_Turn;
 } Dart_Rack_Motor_Group_t;
 
-
 extern Referee_Data_t Referee;
 extern DBUS_Typedef   DBUS;
 extern VT13_Typedef   VT13;

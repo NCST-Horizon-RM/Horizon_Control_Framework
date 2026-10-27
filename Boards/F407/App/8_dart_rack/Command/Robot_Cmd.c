@@ -12,6 +12,7 @@
 #include "dsp/fast_math_functions.h"
 #include "DualBoard_Frame.h"
 #include "usbd_cdc_if.h"
+#include "BSP_USB.h"
 
 #define VISION_COMPENSATION       193      //视觉补偿
 // #define PITCH_MAX              25.0f
@@ -175,7 +176,7 @@ static void Cmd_Vision_Sync(void)
 
     vision_tx_cmd.data[i++] = vision_tx_cmd.End_frame;
 
-    CDC_Transmit_FS(vision_tx_cmd.data, sizeof(vision_tx_cmd.data));
+    (void)USB_SendCopy(USB_PORT_CDC1, vision_tx_cmd.data, sizeof(vision_tx_cmd.data));
 }
 
 /**
@@ -184,28 +185,66 @@ static void Cmd_Vision_Sync(void)
  * @param device_ptr CAN设备指针(hcan)
  * @param data 接收到的8字节数据指针
  */
-void Vision_CAN_Rx_Callback(void *instance, uint8_t *data)
-{
 
+bool Vision_USB_CheckFrame(const uint8_t *data, uint16_t size)
+{
+    return data != NULL      // 数据指针有效
+        && size == 12       // 长度是 12 字节
+        && data[0] == 0xCD  // 帧头正确
+        && data[11] == 0xDC; // 帧尾正确
+}
+
+void Vision_USB_Rx_Callback(uint8_t *data,void *device_ptr,uint16_t size)
+{
+    if (device_ptr == NULL || !Vision_USB_CheckFrame(data, size))
+    {
+        return;
+    }
+    Vision_rx_union vision_rx_union = {0};
+    vision_rx_cmd.OffCounter = 1;
+    uint8_t i = 1;
+
+    vision_rx_union.Data[1] = data[i++];
+    vision_rx_union.Data[0] = data[i++];
+    vision_rx_cmd.x1 = vision_rx_union.Data_u16;
+
+    vision_rx_union.Data[1] = data[i++];
+    vision_rx_union.Data[0] = data[i++];
+    vision_rx_cmd.y1 = vision_rx_union.Data_u16;
+
+    vision_rx_union.Data[1] = data[i++];
+    vision_rx_union.Data[0] = data[i++];
+    vision_rx_cmd.x2 = vision_rx_union.Data_u16;
+
+    vision_rx_union.Data[1] = data[i++];
+    vision_rx_union.Data[0] = data[i++];
+    vision_rx_cmd.y2 = vision_rx_union.Data_u16;
+
+    vision_rx_union.Data[1] = data[i++];
+    vision_rx_union.Data[0] = data[i++];
+    vision_rx_cmd.x0 = vision_rx_union.Data_u16 - 640 + VISION_COMPENSATION;
+    vision_rx_cmd.OffCounter = 0;
 }
 
 static void vision_isline()
 {
-    vision_rx_cmd.Data.OffCounter++;
-    if ( vision_rx_cmd.Data.OffCounter > 80)
+    vision_rx_cmd.OffCounter++;
+    if ( vision_rx_cmd.OffCounter > 80)
     {
-        vision_rx_cmd.Data.OffCounter = 80;
+        vision_rx_cmd.OffCounter = 80;
         vision_rx_cmd.mode = VISION_CMD_OFFLINE;
-    }
-
-    else
+    }else
     {
-            if (vision_rx_cmd.Data.x1 == 0 && vision_rx_cmd.Data.x2 == 0)
+            if (vision_rx_cmd.x1 == 0 && vision_rx_cmd.x2 == 0)
             {
                 vision_rx_cmd.mode = VISION_CMD_OFFLINE;
+            }else
+            {
+                vision_rx_cmd.mode = VISION_CMD_ONLINE;
             }
-        vision_rx_cmd.mode = VISION_CMD_ONLINE;
     }
-
-    vision_rx_cmd.mode = VISION_CMD_SAFE;
+    if (vision_rx_cmd.mode != VISION_CMD_OFFLINE && vision_rx_cmd.mode != VISION_CMD_ONLINE)
+    {
+        vision_rx_cmd.mode = VISION_CMD_SAFE;
+    }
 }

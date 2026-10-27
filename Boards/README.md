@@ -40,7 +40,7 @@ Boards/<board>/
 |---|---|
 | `BSP_CAN.h` | `hcan_t`、`CAN_Send_Msg`、`CAN_Config(hcan_t *, uint32_t fifo)`、`CAN_GetTxFreeLevel`、`CAN_RX_NODE` 宏、`BSP_CAN_Auto_Init`、`CAN_App_Frame_Dispatch`、`BSP_CAN_Register_Slot` |
 | `BSP_UART.h` | `UART_RX_NODE` 宏、`BSP_UART_Register_Slot`、`Auto_UART_Router_Init`、`UART_ReceiveToIdle_DMA` |
-| `BSP_USB.h` | `USB_RX_NODE`、`USB_SendCopy`、`USB_GetLinkState` 等公共接口；板级实现 `USB_Port.h` 的硬件适配 |
+| `BSP_USB.h` | `USB_RX_NODE`（九参数内部缓存 / 十一参数应用接收数组）、`USB_RX_NODE_EX`（高级字段配置）、`USB_SendCopy`、`USB_GetLinkState` 等公共接口；板级实现 `USB_Port.h` 的硬件适配 |
 | `BSP_SPI.h` | `BSP_SPI_RegisterIRQCallback` |
 | `BSP_TIM.h` | `BSP_PWM_t` 及 PWM 控制函数 |
 | `BSP_DWT.h` | `DWT_Init`、`DWT_GetDeltaT`、`DWT_SysTimeUpdate`、`DWT_Profile_*` |

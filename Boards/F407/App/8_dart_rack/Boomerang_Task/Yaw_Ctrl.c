@@ -44,7 +44,7 @@ void Yaw_track()
     {
         yaw_ctrl.Yaw_P.Ref = chassis_cmd.target_yaw;
 
-        PID_Calculate(&yaw_ctrl.Yaw_P,-(vision_rx_cmd.Data.x0),yaw_ctrl.Yaw_P.Ref);
+        PID_Calculate(&yaw_ctrl.Yaw_P,-(vision_rx_cmd.x0),yaw_ctrl.Yaw_P.Ref);
         PID_Calculate(&yaw_ctrl.Yaw_S,dart_rack_motors.DJI_2006_Yaw.Speed_now,yaw_ctrl.Yaw_P.Output);
 
         DJI_Motor_Send(&hcan1,0x1FF,0,(int16_t)yaw_ctrl.Yaw_S.Output,0,0);

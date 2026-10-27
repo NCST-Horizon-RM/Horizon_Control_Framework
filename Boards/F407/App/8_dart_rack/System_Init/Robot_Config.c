@@ -24,6 +24,7 @@ Referee_Data_t Referee;
 static uint8_t Referee_Rx_Buf[2][REFEREE_RXFRAME_LENGTH];
 DBUS_Typedef DBUS = {0};
 static uint8_t DBUS_RX_DATA[18];
+static uint8_t VISION_RX_DATA[12];
 
 /* ================= 链接器段自动注册 ================= */
 
@@ -32,6 +33,10 @@ OFFLINE_NODE(&DBUS.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 
 UART_RX_NODE(&huart1, 115200,0,0, 0, Referee_Rx_Buf[0], Referee_Rx_Buf[1], REFEREE_RXFRAME_LENGTH, &Referee, Referee_System_Frame_Update);
 OFFLINE_NODE(&Referee.offline, REFEREE_OFFLINE_TIME, GROUP_NONE);
+
+USB_RX_NODE(USB_PORT_CDC1, USB_RX_FIXED, 12, 64, 100, 400,
+            Vision_USB_CheckFrame, VISION_RX_DATA, sizeof(VISION_RX_DATA),
+            &vision_rx_cmd, Vision_USB_Rx_Callback);
 
 CAN_RX_NODE(CAN1, 0x206, &dart_rack_motors.DJI_3508_SPRING, DJI_Motor_Resolve);
 OFFLINE_NODE(&dart_rack_motors.DJI_3508_SPRING.offline, MOTOR_OFFLINE_TIME, SHOOT);
