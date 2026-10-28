@@ -8,6 +8,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include "Offline_Detector.h"
+
+#define VISION_OFFLINE_TIME 80
 
 // 云台控制指令
 typedef enum {
@@ -34,8 +37,8 @@ typedef struct {
 // 发射机构控制指令
 typedef enum {
     SHOOT_CMD_SAFE = 0,      // 安全锁死，拉簧电机停转
-    SHOOT_CMD_REMOTE,         // 拉簧电机运行
-    SHOOT_CMD_AUTO
+    SHOOT_CMD_REMOTE,        // 拉簧电机遥控作业
+    SHOOT_CMD_AUTO           //拉簧电机自动作业
 } Shoot_Mode_e;
 
 typedef struct {
@@ -43,17 +46,22 @@ typedef struct {
     float target_spring;
 } Shoot_Cmd_t;
 
-typedef enum {
-    DOOR_CMD_SAFE = 0,      // 安全锁死
-    DOOR_CMD_GAMEOVER,
-    DOOR_CMD_GAMEING,
-    DOOR_CMD_ROUND1,         // 闸门第一次开启
-    DOOR_CMD_ROUND2,          // 闸门第二次开启
-    DOOR_CMD_NONE
-} Door_Mode_e;
+
+typedef enum
+{
+    GAME_CMD_OVER = 0,      //比赛结束/未开始/未比赛
+    GAME_CMD_ING            //比赛开始
+}Game_Mode_e;
+
+typedef enum
+{
+    STATE_CMD_ROUND1,         // 闸门第一次开启
+    STATE_CMD_ROUND2          // 闸门第二次开启
+}State_Mode_e;
 
 typedef struct {
-    Door_Mode_e mode;
+    Game_Mode_e game_mode;
+    State_Mode_e state_mode;
     uint8_t open_cnt;
 } Door_Cmd_t;
 
@@ -71,6 +79,7 @@ typedef union
 
 typedef struct {
     Vision_Mode_e mode;
+    Offline_Check_t offline;
     uint8_t Head_frame;
     uint8_t End_frame;
     int16_t x0;
@@ -78,8 +87,6 @@ typedef struct {
     int16_t y1;
     int16_t x2;
     int16_t y2;
-    uint16_t OffCounter; // 在线检测
-    uint8_t  isOnline;
 } Vision_Rx_Cmd_t;
 
 typedef struct {

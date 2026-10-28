@@ -31,18 +31,19 @@ static uint8_t VISION_RX_DATA[12];
 UART_RX_NODE(&huart3, 100000,0,0, 18, DBUS_RX_DATA, NULL, 18, &DBUS, DBUS_Resolved);
 OFFLINE_NODE(&DBUS.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 
-UART_RX_NODE(&huart1, 115200,0,0, 0, Referee_Rx_Buf[0], Referee_Rx_Buf[1], REFEREE_RXFRAME_LENGTH, &Referee, Referee_System_Frame_Update);
+UART_RX_NODE(&huart6, 115200,0,0, 0, Referee_Rx_Buf[0], Referee_Rx_Buf[1], REFEREE_RXFRAME_LENGTH, &Referee, Referee_System_Frame_Update);
 OFFLINE_NODE(&Referee.offline, REFEREE_OFFLINE_TIME, GROUP_NONE);
 
 USB_RX_NODE(USB_PORT_CDC1, USB_RX_FIXED, 12, 64, 100, 400,
             Vision_USB_CheckFrame, VISION_RX_DATA, sizeof(VISION_RX_DATA),
             &vision_rx_cmd, Vision_USB_Rx_Callback);
+OFFLINE_NODE(&vision_rx_cmd.offline, VISION_OFFLINE_TIME, GROUP_NONE);
 
-CAN_RX_NODE(CAN1, 0x206, &dart_rack_motors.DJI_3508_SPRING, DJI_Motor_Resolve);
+CAN_RX_NODE(CAN1, 0x201, &dart_rack_motors.DJI_3508_SPRING, DJI_Motor_Resolve);
 OFFLINE_NODE(&dart_rack_motors.DJI_3508_SPRING.offline, MOTOR_OFFLINE_TIME, SHOOT);
 
-CAN_RX_NODE(CAN2, 0x201, &dart_rack_motors.DJI_2006_Yaw, DJI_Motor_Resolve);
-OFFLINE_NODE(&dart_rack_motors.DJI_2006_Yaw.offline, MOTOR_OFFLINE_TIME, GIMBAL);
+CAN_RX_NODE(CAN1, 0x206, &dart_rack_motors.DJI_2006_Yaw, DJI_Motor_Resolve);
+OFFLINE_NODE(&dart_rack_motors.DJI_2006_Yaw.offline, MOTOR_OFFLINE_TIME, CHASSIS);
 
-CAN_RX_NODE(CAN1, 0x209, &dart_rack_motors.DJI_6020_Turn, DJI_Motor_Resolve);
+CAN_RX_NODE(CAN2, 0x205, &dart_rack_motors.DJI_6020_Turn, DJI_Motor_Resolve);
 OFFLINE_NODE(&dart_rack_motors.DJI_6020_Turn.offline, MOTOR_OFFLINE_TIME, GIMBAL);

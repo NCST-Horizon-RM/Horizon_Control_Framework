@@ -15,6 +15,10 @@
 #include "System_Indicator.h"
 #include "VT13.h"
 #include "Vofa.h"
+#include "Gimbal_Ctrl.h"
+#include "rack_ctrl.h"
+#include "Shoot_Ctrl.h"
+#include "Yaw_Ctrl.h"
 // 指令中心任务 200Hz
 static uint32_t CMD_DWT_Count = 0;
 static float cmd_period_s = 0.0f;
@@ -62,6 +66,9 @@ void IMU_Task(void *argument) {
 // 运动控制任务 1000Hz
 static uint32_t motor_DWT_Count = 0;
 static float motor_period_s = 0.0f;
+uint8_t Gimbal_Init();
+uint8_t Spring_Control_Init();
+uint8_t Yaw_Init();
 void Motor_Task(void *argument)
 {
     (void)argument;
@@ -75,6 +82,7 @@ void Motor_Task(void *argument)
 
         motor_period_s = DWT_GetDeltaT(&motor_DWT_Count);
 
+        Rack_Task();
 
     }
 }
@@ -94,6 +102,7 @@ void StartTask01(void *argument)
 
         TASK1_Period_S = DWT_GetDeltaT(&TASK1_DWT_Count);
         //在这里加代码
+        Yaw_track();
     }
 }
 
@@ -111,6 +120,7 @@ void StartTask02(void *argument)
 
         TASK2_Period_S = DWT_GetDeltaT(&TASK2_DWT_Count);
         //在这里加代码
+        Arm_Motor_PID();
     }
 }
 

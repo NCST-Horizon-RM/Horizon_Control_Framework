@@ -16,4 +16,7 @@ typedef struct
     float yaw_target;
 } Yaw_Ctrl_Block_t;
 
+uint8_t Yaw_Init();
+void Yaw_track();
+
 #endif //HORIZON_CONTROL_FRAMEWORK_YAW_CTRL_H

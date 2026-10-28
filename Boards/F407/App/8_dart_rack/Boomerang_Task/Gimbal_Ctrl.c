@@ -4,7 +4,7 @@
 
 #include "Gimbal_Ctrl.h"
 
-#define SERVO_NUM 2
+#define SERVO_NUM 2         //舵机数量
 
 static float Target_Ramp(float now, float target);
 
@@ -20,15 +20,18 @@ static Gimbal_Ctrl_Block_t gimbal_ctrl= {
     .gimbal_num.Servo_Encoder.dart4_adsorb_encoder = {120, 700},
     .gimbal_num.Servo_Encoder.dart4_remove_encoder = {400, 550},
     .gimbal_num.Motor_Encoder.dart3_put_encoder = 3450,
-    .gimbal_num.Motor_Encoder.dart3_grab_encoder = 4092,
-    .gimbal_num.Motor_Encoder.dart4_put_encoder = 4500,
-    .gimbal_num.Motor_Encoder.dart4_grab_encoder = 2829,
+    .gimbal_num.Motor_Encoder.dart3_grab_encoder = 2829,
+    .gimbal_num.Motor_Encoder.dart4_put_encoder = 3404,
+    .gimbal_num.Motor_Encoder.dart4_grab_encoder = 4092,
 };
 
-
+//机械臂初始化
 uint8_t Gimbal_Init()
 {
-    float PID_TURN_P[3] = {1.0f, 0.01f, 0.0f};
+    //电磁铁PWM启动
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+
+    float PID_TURN_P[3] = {1.0f, 0.01f, 5.0f};
     PID_Init(&gimbal_ctrl.Turn_P, 300.0f, 30.0f, PID_TURN_P,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     float PID_TURN_S[3] = {40.0f, 0.0f, 0.0f};
@@ -39,7 +42,7 @@ uint8_t Gimbal_Init()
     return 1;
 }
 
-
+//飞镖抓取函数
 void Arm_Grab(uint8_t dart_number)
 {
     // 状态汇报
@@ -63,6 +66,7 @@ void Arm_Grab(uint8_t dart_number)
     }
     else
     {
+        //3、4发飞镖抓取
         switch (dart_number)
         {
         case 3:
@@ -82,6 +86,7 @@ void Arm_Grab(uint8_t dart_number)
     }
 }
 
+//电机增量式移动函数
 void Arm_Motor_Increment_Encoder(float target_angle)
 {
         while (1)
@@ -89,11 +94,6 @@ void Arm_Motor_Increment_Encoder(float target_angle)
             // 1. 计算目标值（带缓启动）
             gimbal_ctrl.gimbal_num.Motor_Encoder.increment_motor_encoder =
                 Target_Ramp((float)dart_rack_motors.DJI_6020_Turn.Angle_Infinite, target_angle);
-
-            PID_Calculate(&gimbal_ctrl.Turn_P,dart_rack_motors.DJI_6020_Turn.Angle_Infinite,gimbal_ctrl.gimbal_num.Motor_Encoder.increment_motor_encoder);
-            PID_Calculate(&gimbal_ctrl.Turn_S,dart_rack_motors.DJI_6020_Turn.Speed_now,gimbal_ctrl.Turn_P.Output);
-
-            DJI_Motor_Send(&hcan2,0x1FE,(int16_t)gimbal_ctrl.Turn_S.Output,0,0,0);
 
             // 2. 延时，给RTOS调度
             osDelay(1);
@@ -135,6 +135,7 @@ static float Target_Ramp(float now, float target)
     return out;
 }
 
+//舵机抓取动作
 void Arm_Servo_Grab(uint8_t dart_number)
 {
     ServoMoveMulti(SERVO_NUM,
@@ -177,6 +178,7 @@ void Arm_Servo_Grab(uint8_t dart_number)
     osDelay(1000);
 }
 
+//舵机放置动作
 void Arm_Servo_Put()
 {
     ServoMoveMulti(SERVO_NUM,
@@ -194,11 +196,19 @@ void Arm_Servo_Put()
         gimbal_ctrl.gimbal_num.Servo_Encoder.put2_encoder,
         gimbal_ctrl.gimbal_num.Servo_Encoder.act_time);
     osDelay(1000);
-    HAL_GPIO_WritePin(GPIOC ,GPIO_PIN_6 ,GPIO_PIN_SET);//电磁铁下磁
+    HAL_GPIO_WritePin(GPIOB ,GPIO_PIN_12 ,GPIO_PIN_SET);//电磁铁下磁
     ServoMoveMulti(SERVO_NUM,
         gimbal_ctrl.gimbal_num.Servo_Encoder.servo_ids,
         gimbal_ctrl.gimbal_num.Servo_Encoder.wait_encoder,
         gimbal_ctrl.gimbal_num.Servo_Encoder.act_time);
     osDelay(1000);
-    HAL_GPIO_WritePin(GPIOC ,GPIO_PIN_6 ,GPIO_PIN_RESET);//电磁铁重新上磁
+    HAL_GPIO_WritePin(GPIOB ,GPIO_PIN_12 ,GPIO_PIN_RESET);//电磁铁重新上磁
+}
+
+void Arm_Motor_PID()
+{
+    PID_Calculate(&gimbal_ctrl.Turn_P,dart_rack_motors.DJI_6020_Turn.Angle_Infinite,gimbal_ctrl.gimbal_num.Motor_Encoder.increment_motor_encoder);
+    PID_Calculate(&gimbal_ctrl.Turn_S,dart_rack_motors.DJI_6020_Turn.Speed_now,gimbal_ctrl.Turn_P.Output);
+
+    DJI_Motor_Send(&hcan2,0x1FE,(int16_t)gimbal_ctrl.Turn_S.Output,0,0,0);
 }

@@ -33,7 +33,9 @@ void Yaw_track()
                              sys_state.global_mode == GLOBAL_STANDBY ||
                              sys_state.global_mode == GLOBAL_INIT_STAGE);
 
-    if (vision_rx_cmd.mode == VISION_CMD_SAFE || is_system_locked)
+    if (vision_rx_cmd.mode == VISION_CMD_SAFE
+        || vision_rx_cmd.mode == VISION_CMD_OFFLINE
+        || is_system_locked)
     {
         // 清空PID
         for (int i = 0; i < 2; i++) {

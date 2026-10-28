@@ -11,16 +11,18 @@ Shoot_Ctrl_Block_t shoot_ctrl ={
     .fire_pwm = 180,
 };
 
+//初始化拉簧电机
 uint8_t Spring_Control_Init()
 {
     float PID_SPRING_S[3] = {15.0f, 0.7f, 0.0f};
-    PID_Init(&shoot_ctrl.Spring_S, 50.0f, 30.0f, PID_SPRING_S,
+    PID_Init(&shoot_ctrl.Spring_S, 16384.0f, 7000.0f, PID_SPRING_S,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
     //向系统下发发射当前状态，准备中
     System_State_Report(ID_SHOOT, STATUS_PREPARING);
     return 1;
 }
 
+//拉簧电机移动
 void Spring_Move()
 {
     // 状态汇报
@@ -49,10 +51,11 @@ void Spring_Move()
     }
 }
 
+//自动移动
 static void Auto_Move()
 {
-    shoot_ctrl.pin_switch_down = HAL_GPIO_ReadPin(GPIOF, GPIO_PIN_0);
-    shoot_ctrl.pin_switch_up = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_14);
+    shoot_ctrl.pin_switch_down = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13);
+    shoot_ctrl.pin_switch_up = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14);
     switch(shoot_ctrl.pin_switch_down)
     {
     case SET:
@@ -80,6 +83,7 @@ static void Auto_Move()
     }
 }
 
+//发射
 void Dart_Fire(void)
 {
     // 打开扳机
@@ -91,6 +95,7 @@ void Dart_Fire(void)
     osDelay(500);
 }
 
+//角度转换PWM
 uint32_t  Angle_To_CCR(float angle)
 {
     // 高电平时间范围：0.5ms  2.5ms

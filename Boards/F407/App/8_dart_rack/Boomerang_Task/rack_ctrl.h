@@ -9,6 +9,7 @@
 #include "Shoot_Ctrl.h"
 #include "Yaw_Ctrl.h"
 
+//镖架发射状态
 typedef enum {
     FIRE_STATE1 = 0,
     FIRE_STATE2,

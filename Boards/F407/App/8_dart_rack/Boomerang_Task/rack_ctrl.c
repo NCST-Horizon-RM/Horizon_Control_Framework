@@ -8,17 +8,17 @@ Rack_State_e rack_state = {0};
 
 void Rack_Task()
 {
-    if (door_cmd.mode == DOOR_CMD_GAMEOVER)
+    if (door_cmd.game_mode == GAME_CMD_OVER)
     {
         Spring_Move();
-    }else if (door_cmd.mode == DOOR_CMD_GAMEING)
+    }else if (door_cmd.game_mode == GAME_CMD_ING)
     {
-        if (door_cmd.mode == DOOR_CMD_ROUND1)
+        if (door_cmd.state_mode == STATE_CMD_ROUND1)
         {
             switch (rack_state)
             {
                 case FIRE_STATE1:
-                    HAL_GPIO_WritePin(GPIOC ,GPIO_PIN_6 ,GPIO_PIN_RESET);
+                    HAL_GPIO_WritePin(GPIOB ,GPIO_PIN_12 ,GPIO_PIN_RESET);
                     Arm_Motor_Increment_Encoder(GIMBAL_MOTOR_MID);
                     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, Angle_To_CCR(shoot_ctrl.close_pwm));
                     Spring_Move();
@@ -55,7 +55,7 @@ void Rack_Task()
                 default:
                 break;
             }
-        }else if (door_cmd.mode == DOOR_CMD_ROUND2)
+        }else if (door_cmd.state_mode == STATE_CMD_ROUND2)
         {
             if (rack_state == FIRE_STATE3_HALF && shoot_ctrl.shoot_state == APPROVE_FIRE)
             {
@@ -70,7 +70,7 @@ void Rack_Task()
                     Arm_Servo_Put();
                     osDelay(300);
                     Dart_Fire();
-                    door_cmd.mode = DOOR_CMD_NONE;
+                    rack_state = STOP_FIRE;
                 }
             }
         }

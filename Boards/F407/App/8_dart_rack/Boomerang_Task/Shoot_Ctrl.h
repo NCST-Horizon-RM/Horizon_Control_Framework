@@ -11,6 +11,7 @@
 #include "tim.h"
 #include "Robot_Config.h"
 
+//拉簧电机状态
 typedef enum {
     SHOOT_MOVING = 0,
     APPROVE_FIRE
@@ -21,10 +22,10 @@ typedef struct
     Shoot_State_e shoot_state;
     PID_t Spring_S;
     float spring_target_speed;
-    uint8_t close_pwm;
-    uint8_t fire_pwm;
-    uint8_t pin_switch_down;
-    uint8_t pin_switch_up;
+    uint8_t close_pwm;              //不发射时舵机PWM
+    uint8_t fire_pwm;               //发射时扣下扳机的舵机PWM
+    uint8_t pin_switch_down;        //判断是否成功储能
+    uint8_t pin_switch_up;          //判断是否成功上膛
 } Shoot_Ctrl_Block_t;
 
 extern Shoot_Ctrl_Block_t shoot_ctrl;

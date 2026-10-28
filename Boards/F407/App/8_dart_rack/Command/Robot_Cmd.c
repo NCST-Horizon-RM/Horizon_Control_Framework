@@ -15,21 +15,7 @@
 #include "BSP_USB.h"
 
 #define VISION_COMPENSATION       193      //视觉补偿
-// #define PITCH_MAX              25.0f
-// #define PITCH_MIN             -20.0f
-// #define FRICTION_MAX_RPM       6500.0f
-// #define FRICTION_RAMP_STEP     1.7f    //摩擦轮缓启动时长
-//
- #define RC_ROCKER_SPRING_COEF      4  // 摇杆控制平移的增益
-// #define RC_ROCKER_VW_COEF      0.02f   // 摇杆控制自旋的增益
-// #define RC_PITCH_COEF          0.001f
-// #define RC_YAW_COEF            0.006f
-//
-// #define KB_WASD_COEF           1.0f    // 键盘 WASD 速度增益
-// #define MOUSE_PITCH_COEF       0.06f
-// #define MOUSE_YAW_COEF         0.04f
-//
-// #define YAW_ZERO               1100
+#define RC_ROCKER_SPRING_COEF      4  // 摇杆控制平移的增益
 
 // --- 本地静态内存缓存 ---
 Chassis_Cmd_t chassis_cmd = {0};
@@ -38,6 +24,8 @@ Shoot_Cmd_t shoot_cmd = {0};
 Door_Cmd_t door_cmd = {0};
 Vision_Tx_Cmd_t vision_tx_cmd = {0};
 Vision_Rx_Cmd_t vision_rx_cmd = {0};
+Game_Mode_e game_mode = {0};
+State_Mode_e state_mode = {0};
 // --- 私有函数声明 ---
 static void Cmd_Handle_Safe_Mode(void);
 static void Cmd_Update_Remote_Ctrl(void);
@@ -52,29 +40,29 @@ void Robot_Cmd_Init(void)
     // topic 槽位表在 Robot_Config.c 静态装配，无需运行时注册
 }
 
+//指令更新
 void Robot_Cmd_Update(void)
 {
 
-    System_State_Report_Remote(DBUS.offline.is_online);//向系统状态模块传入遥控器在线状态
+    System_State_Report_Remote(DBUS.offline.is_online);     //向系统状态模块传入遥控器在线状态
 
     if (sys_state.global_mode == GLOBAL_SAFE_LOCK ||
         sys_state.global_mode == GLOBAL_MODULE_ERROR ||
         sys_state.global_mode == GLOBAL_STANDBY)
     {
         Cmd_Handle_Safe_Mode();
-    }
-    if (Referee.game_status.game_progress > 1 &&
+    }else if (Referee.game_status.game_progress > 1 &&
         Referee.game_status.game_progress < 6)
     {
-        door_cmd.mode = DOOR_CMD_GAMEING;
+        door_cmd.game_mode = GAME_CMD_ING;
         Cmd_Update_Referee_Ctrl();
     }else
     {
-        door_cmd.mode = DOOR_CMD_GAMEOVER;
+        door_cmd.game_mode = GAME_CMD_OVER;
         Cmd_Update_Remote_Ctrl();
     }
 
-    // 视觉数据
+    // 视觉数据发送
     Cmd_Vision_Sync();
     //视觉离线检测
     vision_isline();
@@ -129,10 +117,10 @@ static void Cmd_Update_Referee_Ctrl(void)
     switch (door_cmd.open_cnt)
     {
         case 1:
-        door_cmd.mode = DOOR_CMD_ROUND1;
+        door_cmd.state_mode = STATE_CMD_ROUND1;
         break;
         case 2:
-        door_cmd.mode = DOOR_CMD_ROUND2;
+        door_cmd.state_mode = STATE_CMD_ROUND2;
         break;
         default:
         break;
@@ -140,7 +128,7 @@ static void Cmd_Update_Referee_Ctrl(void)
 }
 
 /**
- * @brief 视觉追踪独立函数
+ * @brief 视觉下发Yaw轴指令
  */
 static void Cmd_Update_Vision_Ctrl_Yaw(void)
 {
@@ -158,7 +146,7 @@ static void Cmd_Update_Vision_Ctrl_Yaw(void)
 }
 
 /**
- * @brief 视觉数据同步逻辑
+ * @brief 向视觉发送击打目标
  */
 static void Cmd_Vision_Sync(void)
 {
@@ -186,6 +174,7 @@ static void Cmd_Vision_Sync(void)
  * @param data 接收到的8字节数据指针
  */
 
+//视觉帧头帧尾及长度检测
 bool Vision_USB_CheckFrame(const uint8_t *data, uint16_t size)
 {
     return data != NULL      // 数据指针有效
@@ -194,14 +183,18 @@ bool Vision_USB_CheckFrame(const uint8_t *data, uint16_t size)
         && data[11] == 0xDC; // 帧尾正确
 }
 
+//视觉接收回调函数
 void Vision_USB_Rx_Callback(uint8_t *data,void *device_ptr,uint16_t size)
 {
     if (device_ptr == NULL || !Vision_USB_CheckFrame(data, size))
     {
         return;
     }
+
+    Vision_Rx_Cmd_t *rx = (Vision_Rx_Cmd_t *)device_ptr;
+    rx->offline.last_feed_tick = HAL_GetTick();
+
     Vision_rx_union vision_rx_union = {0};
-    vision_rx_cmd.OffCounter = 1;
     uint8_t i = 1;
 
     vision_rx_union.Data[1] = data[i++];
@@ -223,15 +216,13 @@ void Vision_USB_Rx_Callback(uint8_t *data,void *device_ptr,uint16_t size)
     vision_rx_union.Data[1] = data[i++];
     vision_rx_union.Data[0] = data[i++];
     vision_rx_cmd.x0 = vision_rx_union.Data_u16 - 640 + VISION_COMPENSATION;
-    vision_rx_cmd.OffCounter = 0;
 }
 
+//视觉状态更新
 static void vision_isline()
 {
-    vision_rx_cmd.OffCounter++;
-    if ( vision_rx_cmd.OffCounter > 80)
+    if (vision_rx_cmd.offline.is_online == 0)
     {
-        vision_rx_cmd.OffCounter = 80;
         vision_rx_cmd.mode = VISION_CMD_OFFLINE;
     }else
     {
@@ -242,9 +233,5 @@ static void vision_isline()
             {
                 vision_rx_cmd.mode = VISION_CMD_ONLINE;
             }
-    }
-    if (vision_rx_cmd.mode != VISION_CMD_OFFLINE && vision_rx_cmd.mode != VISION_CMD_ONLINE)
-    {
-        vision_rx_cmd.mode = VISION_CMD_SAFE;
     }
 }
