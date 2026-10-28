@@ -74,12 +74,40 @@ static void update_leg(VMC_Control_t *vmc, float JRM[2][2],
     leg->theta[0] = theta;
     leg->phi = atan2f(yc, xc);
 
-    JRM[0][0] = vmc->l4 * cosf(theta - phi3) * sinf(phi2 - front) / safe_s23;
-    JRM[0][1] = -vmc->l4 * sinf(theta - phi3) * sinf(phi2 - front) /
+    const float phi3_world = phi3 + body_pitch_rad;
+    const float phi2_world = phi2 + body_pitch_rad;
+    JRM[0][0] = vmc->l4 * cosf(theta - phi3_world) * sinf(phi2 - front) / safe_s23;
+    JRM[0][1] = -vmc->l4 * sinf(theta - phi3_world) * sinf(phi2 - front) /
                 (safe_s23 * fmaxf(length, 1.0e-5f));
-    JRM[1][0] = vmc->l1 * cosf(theta - phi2) * sinf(back - phi3) / safe_s23;
-    JRM[1][1] = -vmc->l1 * sinf(theta - phi2) * sinf(back - phi3) /
+    JRM[1][0] = vmc->l1 * cosf(theta - phi2_world) * sinf(back - phi3) / safe_s23;
+    JRM[1][1] = -vmc->l1 * sinf(theta - phi2_world) * sinf(back - phi3) /
                 (safe_s23 * fmaxf(length, 1.0e-5f));
+}
+
+static void update_springs(VMC_Control_t *vmc)
+{
+    for (int side = 0; side < 2; ++side) {
+        const VMC_LegSite_t *leg = side ? &vmc->right : &vmc->left;
+        VMC_AirSpring_t *spring = &vmc->spring[side];
+        const float (*JRM)[2] = side ? vmc->JRM_r : vmc->JRM_l;
+        spring->torque_front_nm = spring->torque_back_nm = 0.0f;
+
+        const float L = leg->length[0];
+        float angle = acosf(fminf(fmaxf(
+            (vmc->l1 * vmc->l1 + vmc->l2 * vmc->l2 - L * L)
+            / (2.0f * vmc->l1 * vmc->l2), -1.0f), 1.0f));
+        float gain = L / (vmc->l1 * vmc->l2 * sinf(angle));
+        angle -= spring->angle_offset_rad;
+        spring->length_m = hypotf(spring->s3 - spring->s2 * cosf(angle), spring->s2 * sinf(angle));
+        spring->force_n = spring->force_ref_n + spring->k * (spring->length_ref_m - spring->length_m);
+        gain *= spring->force_n * spring->s2 * spring->s3 * sinf(angle) / spring->length_m;
+        if (!isfinite(gain)) {
+            spring->length_m = spring->force_n = 0.0f;
+            continue;
+        }
+        spring->torque_front_nm = gain * JRM[0][0];
+        spring->torque_back_nm = gain * JRM[1][0];
+    }
 }
 
 void VMC_Init(VMC_Control_t *vmc, float l1, float l2, float l3, float l4)
@@ -89,6 +117,15 @@ void VMC_Init(VMC_Control_t *vmc, float l1, float l2, float l3, float l4)
     }
     memset(vmc, 0, sizeof(*vmc));
     vmc->l1 = l1; vmc->l2 = l2; vmc->l3 = l3; vmc->l4 = l4;
+    vmc->spring[0] = (VMC_AirSpring_t) {
+        .s2 = 0.05750f,
+        .s3 = 0.18623f,
+        .angle_offset_rad = 12.49f * (VMC_TWO_PI / 360.0f),
+        .length_ref_m = 0.19f,
+        .force_ref_n = 300.0f,
+        .k = 50.0f / 0.06f,
+    };
+    vmc->spring[1] = vmc->spring[0];
 }
 
 void VMC_ResetFeedbackHistory(VMC_Control_t *vmc)
@@ -122,6 +159,8 @@ void VMC_Update(VMC_Control_t *vmc, float dt, float body_pitch_rad,
                pos_back_L, body_pitch_rad);
     update_leg(vmc, vmc->JRM_r, &vmc->right, -pos_front_R,
                -pos_back_R, body_pitch_rad);
+    // 与输出模式无关；首次采样和无效 dt 时，也先刷新几何与弹簧反馈。
+    update_springs(vmc);
 
     if (!vmc->derivative_initialized) {
         VMC_ResetFeedbackHistory(vmc);
@@ -167,6 +206,18 @@ void VMC_ForceToTorque(const float JRM[2][2], float force, float Tp_target,VMC_L
 {
     leg->Tp_front = JRM[0][0] * force + JRM[0][1] * Tp_target;
     leg->Tp_back = JRM[1][0] * force + JRM[1][1] * Tp_target;
+}
+
+void VMC_CalcTorque(VMC_Control_t *vmc, float left_force, float right_force,
+                     float left_torque, float right_torque)
+{
+    for (int side = 0; side < 2; ++side) {
+        VMC_LegSite_t *leg = side ? &vmc->right : &vmc->left;
+        const VMC_AirSpring_t *spring = &vmc->spring[side];
+        const float (*JRM)[2] = side ? vmc->JRM_r : vmc->JRM_l;
+        VMC_ForceToTorque(JRM, side ? right_force : left_force,
+                          side ? right_torque : left_torque, leg);
+    }
 }
 
 bool VMC_TorqueToForce(const float JRM[2][2], float torque_front,

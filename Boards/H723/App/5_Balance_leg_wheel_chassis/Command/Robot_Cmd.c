@@ -82,7 +82,7 @@ static void Cmd_Update_Remote_Ctrl(void)
     }
     else {
         chassis_cmd.target_length += (float)g2c.CH3 * RC_LENGTH_COEF;
-        chassis_cmd.target_length=MATH_Limit_float(chassis_cmd.target_length,0.17f,0.32f);
+        chassis_cmd.target_length=MATH_Limit_float(chassis_cmd.target_length,0.14f,0.30f);
         chassis_cmd.target_vx = (float)g2c.CH1 * RC_ROCKER_XY_COEF;
         chassis_cmd.target_roll = (float)g2c.CH0 * 0.00015f ;
 

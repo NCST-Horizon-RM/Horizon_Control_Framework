@@ -20,7 +20,7 @@
 #define LEFT_WHEEL_SIGN                  -1.0f    // 左轮速度反馈方向修正
 #define RIGHT_WHEEL_SIGN                  1.0f    // 右轮速度反馈方向修正
 #define NM_ENCODER                       (1.0f/(0.315f*20.0f)*16384.0f) // 轮电机力矩到电流指令的换算系数
-#define LESO_ENABLE                       1       // LESO补偿使能开关
+#define LESO_ENABLE                       0       // LESO补偿使能开关
 
 static Chassis_Ctrl_Block_t chassis_ctrl;
 static uint16_t save_cnt = 0;
@@ -80,6 +80,15 @@ uint8_t Chassis_Control_Init()
     Contact_Detector_Init(&chassis_ctrl.contact_left,0);
     Contact_Detector_Init(&chassis_ctrl.contact_right,0);
 
+    float pid_joint_pos[3] = {10.0f, 0.0f, 0.0f};
+    float pid_joint_vel[3] = {12.0f, 0.0f, 0.0f};
+    for (int i = 0; i < 4; i++) {
+        PID_Init(&chassis_ctrl.joint_pos[i], 3.5f, 0.0f,
+            pid_joint_pos, 0, 0, 0, 0, 0, 0);
+        PID_Init(&chassis_ctrl.joint_vel[i], 7.0f, 0.0f,
+            pid_joint_vel, 0, 0, 0, 0, 0, 0);
+    }
+
     // 底盘跟随PID初始化
     float PID_Follow_Pos[3] = {10.0f,   0.0f,   0.0f};
     PID_Init(&chassis_ctrl.Follow_Pos, 15.0f, 0.0f, PID_Follow_Pos,
@@ -107,7 +116,10 @@ uint8_t Chassis_Control_Init()
     return 1;
 }
 
-float pitch_rael;
+float left_front_target;
+float left_back_target;
+float right_front_target;
+float right_back_target;
 /**
  * @brief 底盘控制任务
  */
@@ -126,27 +138,27 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
         chassis_cmd.mode == CHASSIS_CMD_FOLLOW;
 
     /* Keep feedback kinematics alive even while outputs are safety-locked. */
-    // q0 为四元数标量项，四元数已归一化
-    float sin_tilt = 2.0f * (imu->q[0]*imu->q[2] - imu->q[1]*imu->q[3]);
-    float cos_tilt = 1.0f - 2.0f * (imu->q[1]*imu->q[1] + imu->q[2]*imu->q[2]);
-
-    pitch_rael = atan2f(sin_tilt, cos_tilt); // 弧度，±π
-    const float pitch = (imu != NULL) ? pitch_rael : 0.0f;
+    const float pitch = (imu != NULL) ? imu->pitch * DEG2RAD : 0.0f;
     VMC_Update(&chassis_ctrl.vmc, dt, pitch,
         l_motor->BM_P1010B_Leg[0].pos_rad,
         l_motor->BM_P1010B_Leg[2].pos_rad,
         l_motor->BM_P1010B_Leg[1].pos_rad,
         l_motor->BM_P1010B_Leg[3].pos_rad);
-    VMC_TorqueToForce(chassis_ctrl.vmc.JRM_l,
-                      l_motor->BM_P1010B_Leg[0].IQ,
-                      l_motor->BM_P1010B_Leg[2].IQ,
-                      &chassis_ctrl.vmc.left);
-    /* Right joint feedback uses the opposite sign convention. */
-    VMC_TorqueToForce(chassis_ctrl.vmc.JRM_r,
-                      -l_motor->BM_P1010B_Leg[1].IQ,
-                      -l_motor->BM_P1010B_Leg[3].IQ,
-                      &chassis_ctrl.vmc.right);
+    VMC_TorqueToForce(
+        chassis_ctrl.vmc.JRM_l,
+        l_motor->BM_P1010B_Leg[0].IQ
+            + chassis_ctrl.vmc.spring[0].torque_front_nm,
+        l_motor->BM_P1010B_Leg[2].IQ
+            + chassis_ctrl.vmc.spring[0].torque_back_nm,
+        &chassis_ctrl.vmc.left);
 
+    VMC_TorqueToForce(
+        chassis_ctrl.vmc.JRM_r,
+        -l_motor->BM_P1010B_Leg[1].IQ
+            + chassis_ctrl.vmc.spring[1].torque_front_nm,
+        -l_motor->BM_P1010B_Leg[3].IQ
+            + chassis_ctrl.vmc.spring[1].torque_back_nm,
+        &chassis_ctrl.vmc.right);
     /* Wheel odometry: motor speed feedback is RPM at the motor shaft. */
     const float left_wheel_radps =
         LEFT_WHEEL_SIGN * (float)c_motor->DJI_3508_Chassis[0].Speed_now
@@ -162,6 +174,7 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                               left_wheel_speed_mps,
                               right_wheel_speed_mps);
     Buffer_Calc(&Meter,dt,50);
+    Chassis_UpdateSupportForces(imu, dt);
     Contact_Detector_Update(&chassis_ctrl.contact_left, &chassis_ctrl.vmc.left, imu->accel[2]);
     Contact_Detector_Update(&chassis_ctrl.contact_right, &chassis_ctrl.vmc.right, imu->accel[2]);
 
@@ -185,20 +198,38 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                     Chassis_ResetSupportController();
                     // Handle save mode
                     // 逆解关节电机目标
+                    VMC_InverseKinematics(&chassis_ctrl.vmc,0.15f,0,imu->pitch * DEG2RAD,&left_front_target,&left_back_target);
+                    VMC_InverseKinematics(&chassis_ctrl.vmc,0.15f,0,imu->pitch * DEG2RAD,&right_front_target,&right_back_target);
                     float pos_target[4];
                     // 关节电机目标值归一化
-                    BM_Send_torque(&hfdcan2, 0x032, 0,0,0,0);
+                    pos_target[0] = l_motor->BM_P1010B_Leg[0].pos_single +
+                                    normalize_to_pi(left_front_target - l_motor->BM_P1010B_Leg[0].pos_rad);
+                    pos_target[2] = l_motor->BM_P1010B_Leg[2].pos_single +
+                                    normalize_to_pi(left_back_target - l_motor->BM_P1010B_Leg[2].pos_rad);
+                    pos_target[1] = l_motor->BM_P1010B_Leg[1].pos_single +
+                                    normalize_to_pi(-right_front_target - l_motor->BM_P1010B_Leg[1].pos_rad);
+                    pos_target[3] = l_motor->BM_P1010B_Leg[3].pos_single +
+                                    normalize_to_pi(-right_back_target - l_motor->BM_P1010B_Leg[3].pos_rad);
+                    for (int i=0;i<4;i++) {
+                        PID_Calculate(&chassis_ctrl.joint_pos[i],l_motor->BM_P1010B_Leg[i].pos_single,pos_target[i]);
+                        PID_Calculate(&chassis_ctrl.joint_vel[i],l_motor->BM_P1010B_Leg[i].vel_rad,chassis_ctrl.joint_pos[i].Output);
+                    }
+                    BM_Send_torque(&hfdcan2, 0x032, chassis_ctrl.joint_vel[0].Output - chassis_ctrl.vmc.spring[0].torque_front_nm,
+                    chassis_ctrl.joint_vel[1].Output + chassis_ctrl.vmc.spring[1].torque_front_nm,
+                    chassis_ctrl.joint_vel[2].Output - chassis_ctrl.vmc.spring[0].torque_back_nm,
+                    chassis_ctrl.joint_vel[3].Output + chassis_ctrl.vmc.spring[1].torque_back_nm);
+                        //BM_Send_torque(&hfdcan2, 0x032, 0,0,0,0);
                     DJI_Motor_Send(&hfdcan1,0x200,0,0,0,0);
-                    if (fabsf(chassis_ctrl.vmc.left.theta[0]) < 0.1f &&
-                        fabsf(chassis_ctrl.vmc.right.theta[0]) < 0.1f &&
+                    if (fabsf(chassis_ctrl.vmc.left.theta[0]) < 0.2f &&
+                        fabsf(chassis_ctrl.vmc.right.theta[0]) < 0.2f &&
                         fabsf(imu->pitch) < 12.0f &&
                         chassis_ctrl.vmc.left.length[0] < 0.17f &&
                         chassis_ctrl.vmc.right.length[0] < 0.17f) { //&& fabsf(chassis_ctrl.wheel_speed_mps) < 0.06f
                         save_cnt ++;
                         Estimator_Leg_Init(&chassis_ctrl.odometry);
 
-                        if (save_cnt >= 50) {
-                            chassis_cmd.target_length = 0.17f;
+                        if (save_cnt >= 1) {
+                            chassis_cmd.target_length = 0.16f;
                             MODE = CTRL_STAND;
                             save_cnt = 0;
                         }
@@ -266,19 +297,16 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                                    leso_learning_enabled,chassis_cmd.offset_angle);
                         chassis_ctrl.lqr.u[2] = MATH_Limit_float(chassis_ctrl.lqr.u[2], -6, 6);
                         chassis_ctrl.lqr.u[3] = MATH_Limit_float(chassis_ctrl.lqr.u[3], -6, 6);
-                        Chassis_UpdateSupportForces(imu, dt);
-                        VMC_ForceToTorque(chassis_ctrl.vmc.JRM_l,
-                                          chassis_ctrl.support.left_leg_force_n,
-                                          chassis_ctrl.lqr.u[0],
-                                          &chassis_ctrl.vmc.left);
-                        VMC_ForceToTorque(chassis_ctrl.vmc.JRM_r,
-                                          chassis_ctrl.support.right_leg_force_n,
-                                          chassis_ctrl.lqr.u[1],
-                                          &chassis_ctrl.vmc.right);
-                        BM_Send_torque(&hfdcan2, 0x032, chassis_ctrl.vmc.left.Tp_front,
-                            -chassis_ctrl.vmc.right.Tp_front,
-                            chassis_ctrl.vmc.left.Tp_back,
-                            -chassis_ctrl.vmc.right.Tp_back);
+
+                        VMC_CalcTorque(&chassis_ctrl.vmc,
+                            chassis_ctrl.support.left_leg_force_n,
+                            chassis_ctrl.support.right_leg_force_n,
+                            chassis_ctrl.lqr.u[0],
+                            chassis_ctrl.lqr.u[1]);
+                        BM_Send_torque(&hfdcan2, 0x032, chassis_ctrl.vmc.left.Tp_front - chassis_ctrl.vmc.spring[0].torque_front_nm,
+                            -chassis_ctrl.vmc.right.Tp_front + chassis_ctrl.vmc.spring[1].torque_front_nm,
+                            chassis_ctrl.vmc.left.Tp_back - chassis_ctrl.vmc.spring[0].torque_back_nm,
+                            -chassis_ctrl.vmc.right.Tp_back + chassis_ctrl.vmc.spring[1].torque_back_nm);
                         int16_t wheel_raw[2];
                         wheel_raw[0] = (int16_t)(chassis_ctrl.lqr.u[3]
                             * NM_ENCODER);

@@ -25,6 +25,8 @@ typedef struct {
     float body_velocity_mps;
     LQR_Control_t lqr;
     LESO_Control_t leso;
+    PID_t joint_pos[4];
+    PID_t joint_vel[4];
     PID_t Follow_Pos;
     PID_t Follow_Vel;
     Body_Support_Control_t support;
