@@ -53,12 +53,15 @@ void LQR_Update(LQR_Control_t *lqr, const VMC_Control_t *vmc,
     lqr->x[9] = vmc->right.theta[1];
 
     /* Build the reference from commanded motion and equilibrium offsets. */
+    float left_equilibrium, right_equilibrium;
+    e3_table_2d_eval(vmc->left.length[0],vmc->right.length[0],
+                     &left_equilibrium,&right_equilibrium);
     memset(lqr->x_ref, 0, sizeof(lqr->x_ref));
     lqr->x_ref[0] = lqr->target.position_m;
     lqr->x_ref[1] = lqr->target.yaw_rad;
     lqr->x_ref[2] = lqr->target.pitch_rad;
-    lqr->x_ref[3] = lqr->target.left_leg_theta_rad + e3_eval(vmc->left.length[0]);
-    lqr->x_ref[4] = lqr->target.right_leg_theta_rad + e3_eval(vmc->right.length[0]);
+    lqr->x_ref[3] = lqr->target.left_leg_theta_rad + left_equilibrium;
+    lqr->x_ref[4] = lqr->target.right_leg_theta_rad + right_equilibrium;
     lqr->x_ref[5] = lqr->target.velocity_mps;
     lqr->x_ref[6] = lqr->target.yaw_rate_radps;
 
@@ -67,8 +70,8 @@ void LQR_Update(LQR_Control_t *lqr, const VMC_Control_t *vmc,
 
     float leso_measurement[LQR_STATE_SIZE];
     memcpy(leso_measurement, lqr->x, sizeof(leso_measurement));
-    leso_measurement[3] -= e3_eval(vmc->left.length[0]);
-    leso_measurement[4] -= e3_eval(vmc->right.length[0]);
+    leso_measurement[3] -= left_equilibrium;
+    leso_measurement[4] -= right_equilibrium;
     LESO_Update(leso, leso_measurement,
                 vmc->left.length[0], vmc->right.length[0],
                 leso_learning_enabled);

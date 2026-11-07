@@ -24,9 +24,8 @@ typedef struct {
     float target_vx;        // 目标 X 轴平移速度 (m/s)
     float target_vw;        // 目标自旋角速度 (rad/s)
     float offset_angle;     // 云台与底盘的相对夹角
-    bool is_collect;        // 是否开始采集数据
+    float follow_rads;      // 跟随模式下的角速度
     bool is_cap_on;
-    bool jump;      // S1 上拨时请求一次起跳
 } Chassis_Cmd_t;
 
 // 台控制指令

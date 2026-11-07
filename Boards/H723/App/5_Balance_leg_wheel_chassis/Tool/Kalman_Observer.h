@@ -32,6 +32,8 @@ typedef struct {
     float last_wheel_speed;
     float left_wheel_speed_input;
     float right_wheel_speed_input;
+    float left_hip_speed_correction;
+    float right_hip_speed_correction;
     float vx_wheel;
     float vw_wheel;
     float vw_estimate;
@@ -48,6 +50,9 @@ void Estimator_Set_WheelSpeeds(Kalman_Observer_t *est,
                                float right_wheel_speed);
 void Estimator_Set_WheelHalfTrack(Kalman_Observer_t *est,
                                   float wheel_half_track_m);
+void Estimator_Set_LegVelocityCorrection(Kalman_Observer_t *est,
+                                         float left_correction_mps,
+                                         float right_correction_mps);
 void Estimator_QR_Change(Kalman_Observer_t *est,
                          const float Q_data[4], const float R_data[1]);
 

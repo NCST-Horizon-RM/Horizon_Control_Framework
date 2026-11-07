@@ -23,8 +23,8 @@
 
 #define KB_WASD_COEF           330.0f    // 键盘 WASD 速度增益
 #define KB_VW_COEF             660.0f
-#define MOUSE_PITCH_COEF       0.06f
-#define MOUSE_YAW_COEF         0.04f
+#define MOUSE_PITCH_COEF       0.02f
+#define MOUSE_YAW_COEF         0.02f
 #define KB_YAW_COEF            2.0f
 
 #define YAW_ZERO               5100
@@ -51,13 +51,13 @@ void Robot_Cmd_Init(void)
 void Robot_Cmd_Update(void)
 {
 
-    System_State_Report_Remote(DBUS.offline.is_online);//向系统状态模块传入遥控器在线状态
+    System_State_Report_Remote(VT13.offline.is_online);//向系统状态模块传入遥控器在线状态
 
     if (sys_state.error.bit.remote_lost)
     {
         Cmd_Handle_Safe_Mode();
     }
-    else if (DBUS.Ctrl_Mode == 1) {
+    else if (VT13.Ctrl_Mode == 1) {
         Cmd_Update_Mouse_Key();
     }
     else {
@@ -114,7 +114,7 @@ static void Cmd_Update_Remote_Ctrl(void)
     }
     else{
         gimbal_cmd.mode = GIMBAL_CMD_MANUAL;
-        gimbal_cmd.target_yaw_rate = -(float)DBUS.Remote.CH2*RC_YAW_COEF;
+        gimbal_cmd.target_yaw_rate = -(float)VT13.Remote.Channel[3]*RC_YAW_COEF;
         gimbal_cmd.target_yaw += gimbal_cmd.target_yaw_rate;
         gimbal_cmd.target_yaw = normalize_to_pi(gimbal_cmd.target_yaw * DEG2RAD) * RAD2DEG;
 
@@ -157,7 +157,14 @@ static void Cmd_Update_Remote_Ctrl(void)
  */
 static void Cmd_Update_Mouse_Key(void)
 {
+    gimbal_cmd.mode = GIMBAL_CMD_MANUAL;
+    gimbal_cmd.target_yaw_rate = -(float)VT13.Mouse.X_Flt*MOUSE_PITCH_COEF;
+    gimbal_cmd.target_yaw += gimbal_cmd.target_yaw_rate;
+    gimbal_cmd.target_yaw = normalize_to_pi(gimbal_cmd.target_yaw * DEG2RAD) * RAD2DEG;
 
+    gimbal_cmd.target_pitch_rate = (float)VT13.Mouse.Y_Flt * MOUSE_PITCH_COEF;
+    gimbal_cmd.target_pitch -= gimbal_cmd.target_pitch_rate;
+    gimbal_cmd.target_pitch = MATH_Limit_float(gimbal_cmd.target_pitch, -31.0f, 13.0f);
 }
 
 /**
@@ -166,16 +173,15 @@ static void Cmd_Update_Mouse_Key(void)
 uint8_t vision_buf[20];
 static void Cmd_DualBoard_Sync(void)
 {
-    g2c.CH0 = DBUS.Remote.CH0;
-    g2c.CH1 = DBUS.Remote.CH1;
-    g2c.CH2 = DBUS.Remote.CH2;
-    g2c.CH3 = DBUS.Remote.CH3;
-    g2c.Dial = DBUS.Remote.Dial;
+    g2c.CH0 = VT13.Remote.Channel[0];//DBUS.Remote.CH0;
+    g2c.CH1 = VT13.Remote.Channel[1] + VT13.KeyBoard.W * 220 - VT13.KeyBoard.S * 220;//DBUS.Remote.CH1;
+    g2c.CH3 = VT13.Remote.Channel[2] + VT13.Mouse.Z_Flt;//DBUS.Remote.CH3;
+    g2c.Dial = VT13.Remote.wheel;//DBUS.Remote.Dial;
 
+    g2c.remoteOnLine  = VT13.offline.is_online;
+    g2c.S2            = VT13.Remote.mode_sw;//DBUS.Remote.S2;
 
-    g2c.remoteOnLine  = DBUS.offline.is_online;
-    g2c.S1            = DBUS.Remote.S1;
-    g2c.S2            = DBUS.Remote.S2;
+    g2c.yaw_rads      = (int16_t)(IMU_Data.gyro[2] * 100.0f);
 
     uint8_t buf[8];
     G2C_pack(&g2c, buf);

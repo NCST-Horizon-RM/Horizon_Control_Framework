@@ -14,6 +14,7 @@
 #include "System_State.h"
 #include "WS2812.h"
 #include "System_Indicator.h"
+#include "UI_Task.h"
 #include "Vofa.h"
 #include "VT13.h"
 
@@ -68,14 +69,15 @@ void Motor_Task(void *argument)
 {
     (void)argument;
     TickType_t xLastWakeTime = xTaskGetTickCount();
-    const TickType_t xTimeIncrement = pdMS_TO_TICKS(2);//绝对延时1ms
+    const TickType_t xTimeIncrement = pdMS_TO_TICKS(1);//绝对延时1ms
     motor_DWT_Count = DWT->CYCCNT;
+    App_UI_Init();
     for(;;)
     {
         vTaskDelayUntil(&xLastWakeTime, xTimeIncrement);
 
         motor_period_s = DWT_GetDeltaT(&motor_DWT_Count);
-
+        App_UI_Task(HAL_GetTick());
     }
 }
 

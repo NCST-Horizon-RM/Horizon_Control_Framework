@@ -21,6 +21,7 @@ typedef struct {
     float target_vy;         // 目标 Y 轴平移速度 (m/s)
     float target_vw;         // 目标自旋角速度 (rad/s)
     float offset_angle;      // 云台与底盘的相对夹角
+    bool is_cap_on;          // 超级电容开启标志
 } Chassis_Cmd_t;
 
 // 台控制指令

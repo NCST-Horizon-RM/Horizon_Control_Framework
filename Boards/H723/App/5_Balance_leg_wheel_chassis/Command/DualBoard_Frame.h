@@ -13,12 +13,11 @@
 #define DUALBOARD_G2C_FIELDS(X) \
 X(CH0,            int16_t,  11, S) \
 X(CH1,            int16_t,  11, S) \
-X(CH2,            int16_t,  11, S) \
 X(CH3,            int16_t,  11, S) \
 X(Dial,           int16_t,  11, S) \
 X(remoteOnLine,  uint8_t,   2, U) \
-X(S1,            uint8_t,   2, U) \
 X(S2,            uint8_t,   2, U) \
+X(yaw_rads,       int16_t,  16, S) \
 
 
 /* ============================================================

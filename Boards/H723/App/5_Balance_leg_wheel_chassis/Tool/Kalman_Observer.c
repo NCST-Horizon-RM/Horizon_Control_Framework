@@ -100,8 +100,11 @@ static float Estimator_Update_WheelSpeeds(Kalman_Observer_t *est,
                                           const float dt)
 {
     const float predicted_speed = est->state[1];
-    const float vx_wheel = est->vx_wheel;
-    const float vw_wheel = est->vw_wheel;
+    /* Arguments already include shank/leg correction and refer to the hip.
+       Keep est->vx_wheel/vw_wheel as raw wheel diagnostics. */
+    const float vx_wheel = 0.5f * (left_wheel_speed + right_wheel_speed);
+    const float vw_wheel = est->wheel_half_track_m > 1.0e-4f ?
+        (right_wheel_speed-left_wheel_speed)/(2.0f*est->wheel_half_track_m) : 0.0f;
     const float left_expected_speed = predicted_speed -
         imu_yaw_rate * est->wheel_half_track_m;
     const float right_expected_speed = predicted_speed +
@@ -109,9 +112,6 @@ static float Estimator_Update_WheelSpeeds(Kalman_Observer_t *est,
     const float left_residual = left_wheel_speed - left_expected_speed;
     const float right_residual = right_wheel_speed - right_expected_speed;
     const float yaw_residual = vw_wheel - imu_yaw_rate;
-
-    est->vx_wheel = vx_wheel;
-    est->vw_wheel = vw_wheel;
 
     const float left_slip_now = Estimator_Clamp(
         (fabsf(left_residual) - est->slip_threshold) /
@@ -207,8 +207,10 @@ void Estimator_Leg_Update(Kalman_Observer_t *est,
     }
 
     const float valid_dt = Estimator_Clamp(dt, 1.0e-4f, 0.05f);
+    const float left_hip_speed = left_wheel_speed + est->left_hip_speed_correction;
+    const float right_hip_speed = right_wheel_speed + est->right_hip_speed_correction;
     const float center_wheel_speed =
-        0.5f * (left_wheel_speed + right_wheel_speed);
+        0.5f * (left_hip_speed + right_hip_speed);
     if (!est->initialized) {
         est->state[1] = center_wheel_speed;
         est->initialized = 1U;
@@ -216,7 +218,7 @@ void Estimator_Leg_Update(Kalman_Observer_t *est,
 
     Estimator_Predict(est, imu_accel_x, valid_dt);
     const float fused_wheel_speed = Estimator_Update_WheelSpeeds(
-        est, left_wheel_speed, right_wheel_speed, imu_yaw_rate, valid_dt);
+        est, left_hip_speed, right_hip_speed, imu_yaw_rate, valid_dt);
 
     est->last_wheel_speed = fused_wheel_speed;
     est->last_wheel_distance += fused_wheel_speed * valid_dt;
@@ -233,8 +235,18 @@ void Estimator_Set_WheelSpeeds(Kalman_Observer_t *est,
         est->right_wheel_speed_input = right_wheel_speed;
         est->vx_wheel = 0.5f * (left_wheel_speed + right_wheel_speed);
         est->vw_wheel = (est->wheel_half_track_m > 1.0e-4f) ?
-            (right_wheel_speed - left_wheel_speed) /
+            (right_wheel_speed-left_wheel_speed) /
             (2.0f * est->wheel_half_track_m) : 0.0f;
+    }
+}
+
+void Estimator_Set_LegVelocityCorrection(Kalman_Observer_t *est,
+                                         float left_correction_mps,
+                                         float right_correction_mps)
+{
+    if (est != NULL) {
+        est->left_hip_speed_correction = left_correction_mps;
+        est->right_hip_speed_correction = right_correction_mps;
     }
 }
 

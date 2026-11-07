@@ -7,6 +7,7 @@
 #include "Comm_DualBoard.h"
 #include "Robot_Config.h"
 #include "Power_CAP.h"
+#include "Power_Ctrl.h"
 #include "Referee.h"
 #include "System_State.h"
 #include "Robot_Cmd.h"
@@ -16,6 +17,9 @@ static Chassis_Ctrl_Block_t chassis_ctrl;
 static Chassis_ESKF_t chassis_eskf;
 Chassis_ESKF_Output_t eskf_out = {0};
 //功率控制
+static Motor_Power_State_t m_states[4];//底盘共4个电机
+static Power_Motion_Node_t motion_nodes[4];          /**< 四轮模型、运动电流分量及电流上限。 */
+static Power_Motion_Result_t chassis_power_result;   /**< 本周期保留比例、功率预测和分配状态。 */
 
 static float Chassis_Power_Arbitrator(float base_power_limit,
                                       float cur_buffer,
@@ -78,8 +82,8 @@ uint8_t Chassis_Control_Init(void)
     float PID_Vw_Param[3] = {15.0f, 0.0f, 0.0f};
     PID_Init(&chassis_ctrl.PID_Vw, 18.0f, 8.0f, PID_Vw_Param,0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
 
-    float PID_6020_Pos[3] = {500.0f, 0.0f, 0.0f};
-    float PID_6020_Spd[3] = {85.0f,  0.0f, 0.0f};
+    float PID_6020_Pos[3] = {450.0f, 0.0f, 0.0f};
+    float PID_6020_Spd[3] = {75.0f,  0.0f, 0.0f};
 
     for (int i = 0; i < 4; i++)
     {
@@ -90,6 +94,12 @@ uint8_t Chassis_Control_Init(void)
         PID_Init(&chassis_ctrl.Steer_S[i], 16384.0f, 4000.0f, PID_6020_Spd,
             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
         }
+
+    for (int i = 0; i < 4; i++) {
+        motion_nodes[i].motor.state = &m_states[i];   // 每个节点独立 state
+        motion_nodes[i].motor.model = &MODEL_M3508;
+        motion_nodes[i].max_cmd     = 16384.0f;       // C620 满量程，或按安全值
+    }
     //向系统下发底盘当前状态，准备中
     System_State_Report(ID_CHASSIS, STATUS_PREPARING);
     return 1;
@@ -156,9 +166,9 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
             Chassis_ESKF_Update(&chassis_eskf, &eskf_in, &eskf_out);
             VOFA_JustFloat(&huart1,9,chassis_ctrl.chassis_feedback.vx,chassis_ctrl.chassis_feedback.vy,chassis_ctrl.chassis_feedback.vw,
             eskf_out.vx, eskf_out.vy, eskf_out.vw,imu->accel[0],imu->accel[1],imu->accel[2]);
-            chassis_ctrl.chassis_feedback.vx = eskf_out.vx;
-            chassis_ctrl.chassis_feedback.vy = eskf_out.vy;
-            chassis_ctrl.chassis_feedback.vw = eskf_out.vw;
+            //chassis_ctrl.chassis_feedback.vx = eskf_out.vx;
+            //chassis_ctrl.chassis_feedback.vy = eskf_out.vy;
+            //chassis_ctrl.chassis_feedback.vw = eskf_out.vw;
         }
 
         float vx_tar = chassis_cmd.target_vx;
@@ -189,40 +199,45 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const IMU_Data_t
                           chassis_ctrl.Steer_P[i].Output);
         }
 
-    //     for(int i=0; i<4; i++) {
-    //         m_states[i].speed_rpm = chassis_ctrl.swerve_fb.wheel_rpm[i];
-    //         m_states[i].original_cmd = chassis_ctrl.Drive_S[i].Output;
-    //
-    //         m_states[i+4].speed_rpm = chassis_ctrl.swerve_fb.steer_rpm[i];
-    //         m_states[i+4].original_cmd = chassis_ctrl.Steer_S[i].Output;
-    //     }
-    //
-    //     bool trigger_discharge = true;
-    //     float cap_board_limit = 0.0f;
-    //     float final_limit = 0.0f;
-    //     if (Referee.offline.is_online) {
-    //         final_limit = Chassis_Power_Arbitrator(
-    //                                 Referee.robot_status.chassis_power_limit,
-    //                                 Referee.power_heat_data.buffer_energy,
-    //                                 1, &cap, &trigger_discharge, &cap_board_limit);
-    //     }
-    //     else {
-    //         trigger_discharge = FALSE;
-    //         cap_board_limit = 75.0f;//
-    //         final_limit = 75.0f;
-    //     }
-    //
-    //     for(int i=0; i<4; i++) {
-    //         chassis_ctrl.Drive_S[i].Output = m_states[i].limited_cmd;
-    //         chassis_ctrl.Steer_S[i].Output = m_states[i+4].limited_cmd;
-    //     }
-    //
-    //     CapSetData_t cap_cmd = {0};
-    //     cap_cmd.Control.power_key     = 1;
-    //     cap_cmd.Control.capPowerLimit = (uint8_t)cap_board_limit;
-    //     cap_cmd.Control.buffer_now    = (uint8_t)Referee.power_heat_data.buffer_energy;
-    //     cap_cmd.Control.robot_state   = (Referee.robot_status.current_HP > 0) ? 1 : 0;
-    //     Power_Cap_Tx(&hfdcan2, 0x252, &cap_cmd);
+
+        /* 功率预测使用当前实测电机 RPM，而不是目标轮速。 */
+        for (uint8_t i = 0; i < 4; i++) {
+            m_states[i].speed_rpm = c_motor->DJI_3508_Chassis[i].Speed_now;
+            motion_nodes[i].translation_cmd = chassis_ctrl.Chassis_Command.wheel_torque_raw[i];
+            motion_nodes[i].rotation_cmd    = 0.0f;
+        }
+        bool trigger_discharge = chassis_cmd.is_cap_on;// 输入电容开启标志
+        float cap_board_limit = 0.0f;
+        float final_limit = 0.0f;
+        if (Referee.offline.is_online) {
+            final_limit = Chassis_Power_Arbitrator(
+                                    Referee.robot_status.chassis_power_limit,
+                                    Referee.power_heat_data.buffer_energy,
+                                    1, &cap, &trigger_discharge, &cap_board_limit);
+        }
+        else {
+            trigger_discharge = FALSE;
+            cap_board_limit = 45.0f;//
+            final_limit = 50.0f;
+        }
+        if (final_limit < 0.0f) final_limit = 0.0f;
+        Power_Motion_Status_t power_status = Power_Ctrl_Allocate_Motion_Optimal(
+            final_limit, motion_nodes, 4, &chassis_power_result);
+        /* 仅发送已通过功率和电流约束检查的结果，分配失败时本周期输出零电流。 */
+        bool power_output_valid = power_status == POWER_MOTION_OK ||
+                                  power_status == POWER_MOTION_LIMITED;
+        for (uint8_t wheel_index = 0; wheel_index < 4; wheel_index++) {
+            /* 分配器已约束每轮电流，不再逐轮硬截断，以免改变合力方向。 */
+            chassis_ctrl.Chassis_Command.wheel_torque_raw[wheel_index] =
+                power_output_valid ? m_states[wheel_index].limited_cmd : 0.0f;
+        }
+        // 下发电容通讯数据
+        CapSetData_t cap_cmd = {0};
+        cap_cmd.Control.power_key     = trigger_discharge;
+        cap_cmd.Control.capPowerLimit = (uint8_t)cap_board_limit;
+        cap_cmd.Control.buffer_now    = (uint8_t)Referee.power_heat_data.buffer_energy;
+        cap_cmd.Control.robot_state   = (Referee.robot_status.current_HP > 0) ? 1 : 0;
+        Power_Cap_Tx(&hfdcan1, 0x252, &cap_cmd);
     }
     //电流发送
     if (!is_system_locked)

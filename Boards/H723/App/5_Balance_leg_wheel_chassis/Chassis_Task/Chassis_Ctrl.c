@@ -89,14 +89,6 @@ uint8_t Chassis_Control_Init()
             pid_joint_vel, 0, 0, 0, 0, 0, 0);
     }
 
-    // 底盘跟随PID初始化
-    float PID_Follow_Pos[3] = {10.0f,   0.0f,   0.0f};
-    PID_Init(&chassis_ctrl.Follow_Pos, 15.0f, 0.0f, PID_Follow_Pos,
-             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-    float PID_Follow_Spd[3] = {1.0f,   0.0f,   0.0f};
-    PID_Init(&chassis_ctrl.Follow_Vel, 8.0f, 1.0f, PID_Follow_Spd,
-             0, 0, 0, 0, 0, Integral_Limit | ErrorHandle);
-
     chassis_ctrl.wheel_speed_mps = 0.0f;
     chassis_ctrl.body_position_m = 0.0f;
     chassis_ctrl.body_velocity_mps = 0.0f;
@@ -170,6 +162,18 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
     const float right_wheel_speed_mps = WHEEL_RADIUS_M * right_wheel_radps;
     chassis_ctrl.wheel_speed_mps =
         0.5f * (left_wheel_speed_mps + right_wheel_speed_mps);
+    /* Wheel encoders measure rotation relative to the moving shank.
+       Convert wheel odometry to the HIP state used by the gain table. */
+    const VMC_LegSite_t *left_leg = &chassis_ctrl.vmc.left;
+    const VMC_LegSite_t *right_leg = &chassis_ctrl.vmc.right;
+    const float left_hip_correction = WHEEL_RADIUS_M * left_leg->shank_rate_radps
+        + left_leg->length[1] * sinf(left_leg->theta[0])
+        + left_leg->length[0] * cosf(left_leg->theta[0]) * left_leg->theta[1];
+    const float right_hip_correction = WHEEL_RADIUS_M * right_leg->shank_rate_radps
+        + right_leg->length[1] * sinf(right_leg->theta[0])
+        + right_leg->length[0] * cosf(right_leg->theta[0]) * right_leg->theta[1];
+    Estimator_Set_LegVelocityCorrection(&chassis_ctrl.odometry,
+                                       left_hip_correction,right_hip_correction);
     Estimator_Set_WheelSpeeds(&chassis_ctrl.odometry,
                               left_wheel_speed_mps,
                               right_wheel_speed_mps);
@@ -257,7 +261,7 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                             LESO_Init(&chassis_ctrl.leso);
 
                             // 同步目标位置和偏航，避免 x_ref 突变
-                            chassis_ctrl.lqr.target.position_m = chassis_ctrl.odometry.outstate.s + 1.9f;
+                            chassis_ctrl.lqr.target.position_m = chassis_ctrl.odometry.outstate.s;
                             chassis_ctrl.lqr.target.yaw_rad = imu->YawTotalAngle * DEG2RAD;
                             chassis_ctrl.lqr.target.velocity_mps = 0.0f;
                             chassis_ctrl.lqr.target.yaw_rate_radps = 0.0f;
@@ -270,11 +274,9 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                         static float yaw_rad = 0;
                         // 底盘跟随模式下，计算底盘跟随PID
                         if (chassis_cmd.mode == CHASSIS_CMD_FOLLOW) {
-                            PID_Calculate(&chassis_ctrl.Follow_Pos, chassis_cmd.offset_angle, 0.0f);
-                            vw_tar = PID_Calculate(&chassis_ctrl.Follow_Vel, imu->gyro[2], chassis_ctrl.Follow_Pos.Output);
                             LQR_SetTarget(&chassis_ctrl.lqr,
                               chassis_cmd.target_vx,
-                              vw_tar,
+                              chassis_cmd.follow_rads,
                               0.0f, 0.0f, 0.0f, 0.0f, dt);
                         }
                         else if (chassis_cmd.mode == CHASSIS_CMD_SPIN) {
@@ -287,10 +289,6 @@ void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_
                               vw_tar,
                               0.0f, yaw_rad, 0.0f, 0.0f, dt);
                         }
-                        VOFA_JustFloat(&huart1,5,chassis_ctrl.lqr.x[1],
-                            chassis_ctrl.lqr.x_ref[1],
-                            chassis_ctrl.lqr.target.yaw_rad,
-                            vw_tar,yaw_rad);
                         Estimator_Task(&chassis_ctrl.odometry, *imu, dt);
                         LQR_Update(&chassis_ctrl.lqr, &chassis_ctrl.vmc,
                                    &chassis_ctrl.odometry, imu, &chassis_ctrl.leso,

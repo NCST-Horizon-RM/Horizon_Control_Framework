@@ -25,6 +25,9 @@ typedef struct {
     float theta_unwrapped;   /**< 连续世界系腿角 rad，可超出 +/-pi，供恢复轨迹规划使用。 */
     float length_last[2];
     float theta_last[2];
+    float shank_angle_world_rad;
+    float shank_angle_last_rad;
+    float shank_rate_radps;
     float Tp_front;
     float Tp_back;
     float support_force;

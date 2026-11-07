@@ -88,6 +88,7 @@ static void Cmd_Update_Remote_Ctrl(void)
 
         int16_t relative_angle = YAW_ZERO - gimbal_motors.DM4310_Yaw.Angle_now;
         chassis_cmd.offset_angle = normalize_to_pi((float)relative_angle * ENCODER_TO_RAD);
+        chassis_cmd.follow_rads = (float)g2c.yaw_rads * 0.01f;
         chassis_cmd.mode = CHASSIS_CMD_FOLLOW;
         if (g2c.Dial != 0) {
             chassis_cmd.mode = CHASSIS_CMD_SPIN;

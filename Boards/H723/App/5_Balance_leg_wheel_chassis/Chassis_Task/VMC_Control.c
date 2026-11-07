@@ -70,6 +70,8 @@ static void update_leg(VMC_Control_t *vmc, float JRM[2][2],
 
     leg->length_last[0] = leg->length[0];
     leg->theta_last[0] = leg->theta[0];
+    leg->shank_angle_last_rad = leg->shank_angle_world_rad;
+    leg->shank_angle_world_rad = VMC_WrapAngle(phi3 + body_pitch_rad);
     leg->length[0] = length;
     leg->theta[0] = theta;
     leg->phi = atan2f(yc, xc);
@@ -138,6 +140,8 @@ void VMC_ResetFeedbackHistory(VMC_Control_t *vmc)
     vmc->right.length[1] = 0.0f;
     vmc->left.theta[1] = 0.0f;
     vmc->right.theta[1] = 0.0f;
+    vmc->left.shank_rate_radps = 0.0f;
+    vmc->right.shank_rate_radps = 0.0f;
 }
 
 void VMC_Update(VMC_Control_t *vmc, float dt, float body_pitch_rad,
@@ -184,6 +188,8 @@ void VMC_Update(VMC_Control_t *vmc, float dt, float body_pitch_rad,
         vmc->right.length[1] = 0.0f;
         vmc->left.theta[1] = 0.0f;
         vmc->right.theta[1] = 0.0f;
+        vmc->left.shank_rate_radps = 0.0f;
+        vmc->right.shank_rate_radps = 0.0f;
         return;
     }
 
@@ -200,6 +206,12 @@ void VMC_Update(VMC_Control_t *vmc, float dt, float body_pitch_rad,
     const float alpha = (omega_dt > 0.0f) ? omega_dt / (1.0f + omega_dt) : 0.0f;
     vmc->left.theta[1] += alpha * (left_theta_rate_raw - vmc->left.theta[1]);
     vmc->right.theta[1] += alpha * (right_theta_rate_raw - vmc->right.theta[1]);
+    vmc->left.shank_rate_radps += alpha *
+        (VMC_WrapAngle(vmc->left.shank_angle_world_rad - vmc->left.shank_angle_last_rad) / dt
+         - vmc->left.shank_rate_radps);
+    vmc->right.shank_rate_radps += alpha *
+        (VMC_WrapAngle(vmc->right.shank_angle_world_rad - vmc->right.shank_angle_last_rad) / dt
+         - vmc->right.shank_rate_radps);
 }
 
 void VMC_ForceToTorque(const float JRM[2][2], float force, float Tp_target,VMC_LegSite_t *leg)

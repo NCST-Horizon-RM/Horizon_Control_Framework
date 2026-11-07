@@ -12,6 +12,7 @@
 #include "Robot_Cmd.h"
 #include "System_State.h"
 #include "IMU_Task.h"
+#include "SBUS.h"
 
 // 设备数据实例：ISR 写 / 任务读（裸全局 volatile）
 Gimbal_Motor_Group_t gimbal_motors;
@@ -19,6 +20,10 @@ Shoot_Motor_Group_t shoot_motors;
 
 DBUS_Typedef DBUS = {0};
 static uint8_t DBUS_RX_DATA[18];
+SBUS_Typedef SBUS = {0};
+static uint8_t SBUS_RX_DATA[25];
+VT13_Typedef VT13 = {0};
+static uint8_t VT13_RX_DATA[21];
 C2G_t C2G = {0};
 static uint8_t VISION_RX_DATA[19];
 Vision_Recv_t vision_Recv;
@@ -28,8 +33,10 @@ UART_RX_NODE(&huart1, 115200,0,0, 19, VISION_RX_DATA, NULL, 19, &vision_Recv, Vi
 OFFLINE_NODE(&vision_Recv.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 
 UART_RX_NODE(&huart3, 100000,0,0, 18, DBUS_RX_DATA, NULL, 18, &DBUS, DBUS_Resolved);
+//UART_RX_NODE(&huart3, 100000,UART_PARITY_EVEN,UART_STOPBITS_2, 25, SBUS_RX_DATA, NULL, 25, &SBUS, SBUS_Resolved);
 OFFLINE_NODE(&DBUS.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
-UART_RX_NODE(&huart6, 921600,0,0, 0, NULL, NULL, 0, NULL, NULL);
+UART_RX_NODE(&huart6, 921600,0,0, 21, VT13_RX_DATA, NULL, 21, &VT13, VT13_Resolved);
+OFFLINE_NODE(&VT13.offline, DBUS_OFFLINE_TIME, GROUP_NONE);
 CAN_RX_NODE(CAN1, 0x232, &C2G, DualBoard_CAN_Rx_Callback);
 
 CAN_RX_NODE(CAN1, 0x301, &gimbal_motors.DM4310_Yaw, DM_1to4_Resolve);
