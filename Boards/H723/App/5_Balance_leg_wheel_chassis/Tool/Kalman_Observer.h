@@ -4,6 +4,7 @@
 #ifndef H7_FRAMEWORK_KALMAN_OBSERVER_H
 #define H7_FRAMEWORK_KALMAN_OBSERVER_H
 
+#include <stdbool.h>
 #include "IMU_Task.h"
 
 typedef  struct {
@@ -38,6 +39,7 @@ typedef struct {
     float vw_wheel;
     float vw_estimate;
     Estimator_OutState_t outstate;
+    bool skip_wheel_update;  // 主轮未承重时只用 IMU 预测。
 } Kalman_Observer_t;
 
 void Estimator_Leg_Init(Kalman_Observer_t *est);

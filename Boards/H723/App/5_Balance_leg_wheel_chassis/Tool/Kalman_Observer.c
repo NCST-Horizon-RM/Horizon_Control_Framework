@@ -217,11 +217,12 @@ void Estimator_Leg_Update(Kalman_Observer_t *est,
     }
 
     Estimator_Predict(est, imu_accel_x, valid_dt);
-    const float fused_wheel_speed = Estimator_Update_WheelSpeeds(
-        est, left_hip_speed, right_hip_speed, imu_yaw_rate, valid_dt);
-
-    est->last_wheel_speed = fused_wheel_speed;
-    est->last_wheel_distance += fused_wheel_speed * valid_dt;
+    if (!est->skip_wheel_update) {
+        const float fused_wheel_speed = Estimator_Update_WheelSpeeds(
+            est, left_hip_speed, right_hip_speed, imu_yaw_rate, valid_dt);
+        est->last_wheel_speed = fused_wheel_speed;
+        est->last_wheel_distance += fused_wheel_speed * valid_dt;
+    }
     est->outstate.s = est->state[0];
     est->outstate.dot_s = est->state[1];
 }

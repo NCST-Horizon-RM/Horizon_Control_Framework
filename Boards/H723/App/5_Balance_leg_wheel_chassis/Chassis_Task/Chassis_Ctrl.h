@@ -1,44 +1,51 @@
-//
-// Created by CaoKangqi on 2026/6/20.
-//
+/* 曹康祺于 2026 年 6 月 20 日创建。 */
 
 #ifndef H7_FRAMEWORK_CHASSIS_CTRL_H
 #define H7_FRAMEWORK_CHASSIS_CTRL_H
 
 #include <stdint.h>
 #include "Robot_Config.h"
-#include "Chassis_Kinematics.h"
 #include "IMU_Task.h"
-#include "VMC_Control.h"
-#include "Kalman_Observer.h"
-#include "LQR_Control.h"
-#include "LESO_Control.h"
+#include <math.h>
+#include <string.h>
+#include "All_define.h"
 #include "Body_Support_Control.h"
 #include "Classic_Control.h"
-#include "Contact_Detector.h"
+#include "Kalman_Observer.h"
+#include "LQR_Control.h"
+#include "Power_Ctrl.h"
+#include "Robot_Cmd.h"
+#include "Self_Righting.h"
+#include "Step_Climb.h"
+#include "System_State.h"
+
+typedef enum {
+    CTRL_PREPARE = 0,
+    CTRL_STAND,
+    CTRL_FALL_HOLD = 3  /* 拨回安全挡解除 */
+} Chassis_Control_Mode_t;
+
+extern Chassis_Control_Mode_t MODE;
 
 typedef struct {
     VMC_Control_t vmc;
     Kalman_Observer_t odometry;
-    float wheel_speed_mps;
-    float body_position_m;
-    float body_velocity_mps;
     LQR_Control_t lqr;
     LESO_Control_t leso;
-    PID_t joint_pos[4];
-    PID_t joint_vel[4];
     Body_Support_Control_t support;
-    bool stand_initialized;
-    Contact_Detector_t contact_left;
-    Contact_Detector_t contact_right;
-} Chassis_Ctrl_Block_t;
+    PID_t joint_pos[4], joint_vel[4];
+    SelfRighting_t recovery;
+    StepClimb_t step;
+    SelfRighting_Torque_t last_applied;
+    float capture_yaw_rad, spin_yaw_rad;
+    bool stand_initialized, output_enabled;
+} Chassis_Ctrl_t;
 
-typedef enum {
-    CTRL_SAVE = 0,
-    CTRL_STAND,
-    CTRL_JUMP
-} Chassis_Control_Mode_t;
-uint8_t Chassis_Control_Init();
-void Chassis_Control_Task(const Chassis_Motor_Group_t *c_motor, const Leg_Motor_Group_t *l_motor,const IMU_Data_t *imu, float dt);
+/* 初始化估计器、控制器和电机零位，输出从准备阶段开始。 */
+uint8_t Chassis_Control_Init(void);
 
-#endif //H7_FRAMEWORK_CHASSIS_CTRL_H
+/* 由底盘控制任务周期调用，dt 为距上次调用的时间，单位秒。 */
+void Chassis_Control_Task(const Chassis_Motor_Group_t *wheel_motors,
+                          const Leg_Motor_Group_t *leg_feedback, const IMU_Data_t *imu, float dt);
+
+#endif
