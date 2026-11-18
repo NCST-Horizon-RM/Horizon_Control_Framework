@@ -67,7 +67,8 @@ void DM_1to4_Resolve(void* instance, uint8_t* rx_data);
 
 // 控制发送
 void Motor_Mode(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id, DMMotor_Mode_e what);
-void MIT_Ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel, float kp, float kd, float torq);
+void MIT_Ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel,
+              float kp, float kd, float torq, float t_max);
 void Pos_Speed_Ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel);
 void Speed_Ctrl(hcan_t* hcan, uint16_t motor_id, float vel);
 void DM_Motor_Send(hcan_t* hcan, uint16_t master_id, float m1_cur, float m2_cur, float m3_cur, float m4_cur);

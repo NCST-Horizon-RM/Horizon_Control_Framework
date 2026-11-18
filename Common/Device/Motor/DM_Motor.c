@@ -104,14 +104,15 @@ void Motor_Mode(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id, DMMotor_Mode_
  * @param kd       速度环增益 (float)
  * @param torq     目标扭矩 (float)
  */
-void MIT_Ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel, float kp, float kd, float torq)
+void MIT_Ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel,
+              float kp, float kd, float torq, float t_max)
 {
     uint8_t data[8];
     uint16_t p = float_to_uint(pos, P_MIN, P_MAX, 16);
     uint16_t v = float_to_uint(vel, V_MIN, V_MAX, 12);
     uint16_t k_p = float_to_uint(kp, KP_MIN, KP_MAX, 12);
     uint16_t k_d = float_to_uint(kd, KD_MIN, KD_MAX, 12);
-    uint16_t t = float_to_uint(torq, T_MIN, T_MAX, 12);
+    uint16_t t = float_to_uint(torq, -t_max, t_max, 12);
 
     data[0] = p >> 8;
     data[1] = p & 0xFF;
