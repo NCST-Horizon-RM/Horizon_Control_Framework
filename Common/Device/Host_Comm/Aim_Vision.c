@@ -115,3 +115,121 @@ void Vision_Encode(Vision_Send_t *send_data, uint8_t *tx_buf)
     // 帧尾
     tx_buf[19] = VISION_EOF;
 }
+
+/**
+ * @brief  哨兵视觉接收数据解析 (Decode) —— 34 字节支持包头包尾错位自动对齐
+ * @param  rx_buf:    串口 DMA/中断接收到的原始缓冲区 (长度必须为 SENTINEL_VISION_LEN)
+ * @param  recv_data: 解析后存储的哨兵数据结构体指针
+ * @retval true:      解析成功 / false: 校验失败
+ */
+bool Sentinel_Vision_Decode(uint8_t *rx_buf, Sentinel_Vision_Recv_t *recv_data)
+{
+    if (rx_buf == NULL || recv_data == NULL) return false;
+
+    const uint8_t  SOF = VISION_SOF;
+    const uint8_t  EOF = VISION_EOF;
+    const uint16_t LEN = SENTINEL_VISION_LEN; // 34 字节
+
+    uint8_t *p = rx_buf;
+    uint8_t  temp_buf[SENTINEL_VISION_LEN];
+
+    /* ---------- 1. 检查是否已经是标准对齐帧 ---------- */
+    if (rx_buf[0] == SOF && rx_buf[LEN - 1] == EOF) {
+        // 已对齐，无需移动
+    }
+    else {
+        /* ---------- 2. 环形查找 "DC 紧跟 CD" 边界 ---------- */
+        bool frame_found = false;
+        int  offset = 0;
+
+        for (int i = 0; i < LEN; i++) {
+            int next = (i + 1) % LEN;
+            if (rx_buf[i] == EOF && rx_buf[next] == SOF) {
+                offset = next;
+                frame_found = true;
+                break;
+            }
+        }
+
+        if (!frame_found) {
+            return false;
+        }
+
+        /* ---------- 3. 旋转对齐 ---------- */
+        for (int i = 0; i < LEN; i++) {
+            temp_buf[i] = rx_buf[(offset + i) % LEN];
+        }
+        p = temp_buf;
+
+        if (p[0] != SOF || p[LEN - 1] != EOF) {
+            return false;
+        }
+    }
+
+    /* ---------- 4. 零拷贝统一解析 (通过 Frame 协议帧指针映射) ---------- */
+    // 注意：这里必须是 Sentinel_Vision_Frame_t！
+    Sentinel_Vision_Frame_t *frame = (Sentinel_Vision_Frame_t *)p;
+
+    // 1. 云台瞄准数据
+    recv_data->pitch       = frame->pitch;
+    recv_data->yaw         = frame->yaw;
+    recv_data->pitch_vel   = frame->pitch_vel * DEG2RAD;
+    recv_data->yaw_vel     = frame->yaw_vel * DEG2RAD;
+
+    // 2. 哨兵底盘运动导航数据
+    recv_data->vx          = frame->vx;
+    recv_data->vy          = frame->vy;
+    recv_data->wz          = frame->wz;
+
+    // 3. 状态与控制指令（左右字段名完全统一）
+    recv_data->ShootBool   = frame->ShootBool;
+    recv_data->Target      = frame->Target;
+    recv_data->mode        = frame->mode;
+    recv_data->form        = frame->form;
+    recv_data->zhuan       = frame->zhuan;
+    recv_data->vision_mode = frame->vision_mode;
+
+    /* ---------- 5. 解析成功，刷新心跳喂狗 ---------- */
+    recv_data->offline.last_feed_tick = HAL_GetTick();
+
+    return true;
+}
+
+/**
+ * @brief  哨兵视觉发送数据打包 (Encode) —— 严格对齐为 36 字节
+ * @param  send_data: 上层控制与裁判系统数据指针
+ * @param  tx_buf:    发送缓冲区 (长度必须 >= SENTINEL_VISION_SEND_LEN)
+ */
+void Sentinel_Vision_Encode(const Sentinel_Vision_Send_t *send_data, uint8_t *tx_buf)
+{
+    if (send_data == NULL || tx_buf == NULL) return;
+
+    // 直接映射到紧凑帧指针
+    Sentinel_Vision_Tx_Frame_t *frame = (Sentinel_Vision_Tx_Frame_t *)tx_buf;
+
+    // 1. 包头包尾
+    frame->head = VISION_SOF; // 0xCD
+    frame->end  = VISION_EOF; // 0xDC
+
+    // 2. 云台物理量
+    frame->pitch      = send_data->pitch;
+    frame->yaw        = send_data->yaw;          // 底盘 Yaw
+    frame->gimbal_yaw = send_data->gimbal_yaw;   // 云台 Yaw (新增)
+    frame->pitch_vel  = send_data->pitch_vel;
+    frame->yaw_vel    = send_data->yaw_vel;
+
+    // 3. 射击与模式（自动完成 高6位颜色 + 低2位模式 拼接）
+    frame->mode         = ((send_data->color & 0x3F) << 2) | (send_data->vision_state & 0x03);
+    frame->bullet_speed = send_data->bullet_speed;
+
+    // 4. 裁判系统与战局数据
+    frame->game_progress     = send_data->game_progress;
+    frame->stage_remain_time = send_data->stage_remain_time;
+    frame->current_hp        = send_data->current_hp;
+    frame->ally_outpost_hp   = send_data->ally_outpost_hp;
+    frame->state             = send_data->state;
+    frame->energy_state      = send_data->energy_state;
+    frame->bullets           = send_data->bullets;
+    frame->judge             = send_data->judge;
+}
+
